@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>EDID Generator</title>
+    <meta
+      name="description"
+      content="Build a clean EDID in seconds. Pick a default mode, add alternates, toggle options like HDR or VRR. Let us calculate timings, CTA and DisplayID data blocks when needed, and HDMI requirements for you."
+    />
+    <meta property="og:title" content="EDID Generator" />
+    <meta
+      property="og:description"
+      content="Build a clean EDID in seconds. Pick a default mode, add alternates, toggle options like HDR or VRR. Let us calculate timings, CTA and DisplayID data blocks when needed, and HDMI requirements for you."
+    />
+    <meta property="og:url" content="https://edid.build/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="EDID Generator" />
+    <meta property="og:image" content="https://edid.build/assets/images/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="EDID Generator" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="EDID Generator" />
+    <meta
+      name="twitter:description"
+      content="Build a clean EDID in seconds. Pick a default mode, add alternates, toggle options like HDR or VRR. Let us calculate timings, CTA and DisplayID data blocks when needed, and HDMI requirements for you."
+    />
+    <meta name="twitter:image" content="https://edid.build/assets/images/og.png" />
+    <meta name="theme-color" content="#f6f2ea" />
+    <link rel="canonical" href="https://edid.build/" />
+    <link rel="icon" href="assets/images/favicon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="assets/css/styles.css" />
+  </head>
+  <body>
+    <div class="page">
+      <header class="hero">
+        <div>
+          <h1>Build a clean EDID in seconds.</h1>
+          <p class="lede">
+            Set the default mode, add alternates, pick options, and let us handle the rest.
+          </p>
+        </div>
+      </header>
+
+      <main class="layout">
+        <section class="panel">
+          <div class="mode-block">
+            <h2>Default Mode</h2>
+            <div class="mode-row" data-default="true">
+              <label>
+                Preset
+                <select data-field="preset">
+                  <option value="">Custom</option>
+                  <option value="7680x4320">8K</option>
+                  <option value="3840x2160" selected>4K</option>
+                  <option value="2560x1440">1440p</option>
+                  <option value="1920x1080">1080p</option>
+                  <option value="1280x720">720p</option>
+                </select>
+              </label>
+              <label>
+                Width
+                <input type="number" min="320" max="7680" value="3840" data-field="width" />
+              </label>
+              <label>
+                Height
+                <input type="number" min="200" max="4320" value="2160" data-field="height" />
+              </label>
+              <label>
+                Refresh (Hz)
+                <input type="number" min="24" max="240" value="60" data-field="refresh" />
+              </label>
+            </div>
+          </div>
+
+          <div class="mode-block">
+            <div class="mode-header">
+              <h2>Additional Modes</h2>
+              <button class="btn ghost" id="add-mode" type="button" aria-label="Add mode">+ Add mode</button>
+            </div>
+            <div id="extra-modes"></div>
+          </div>
+
+          <h2>Options</h2>
+          <div class="options">
+            <div class="option">
+              <label class="toggle">
+                <input type="checkbox" id="audio-toggle" checked />
+                <span>Audio support (LPCM)</span>
+              </label>
+            </div>
+            <div class="option">
+              <label class="toggle">
+                <input type="checkbox" id="hdr-toggle" />
+                <span>HDR10 support (PQ)</span>
+              </label>
+            </div>
+            <div class="option">
+              <label class="toggle">
+                <input type="checkbox" id="vrr-toggle" />
+                <span>Adaptive sync support (VRR)</span>
+                <span class="note-mark" data-note="vrr" aria-hidden="true" hidden>‡</span>
+              </label>
+              <div class="note-text" data-note-body="vrr" hidden>
+                ‡ No single resolution has multiple refresh rates, so VRR won't work.
+              </div>
+            </div>
+            <div class="option">
+              <label class="toggle">
+                <input type="checkbox" id="deep-color-toggle" />
+                <span>10-bit color (Deep Color)</span>
+                <span class="auto-mark" data-auto="deep-color" aria-hidden="true" hidden>†</span>
+              </label>
+              <div class="auto-note" data-auto-note="deep-color" hidden>
+                † Turned on automatically because HDR is enabled.
+              </div>
+            </div>
+            <div class="option">
+              <label class="toggle">
+                <input type="checkbox" id="dsc-toggle" />
+                <span>DSC compression</span>
+                <span class="auto-mark" data-auto="dsc" aria-hidden="true" hidden>†</span>
+                <span class="note-mark" data-note="dsc" aria-hidden="true" hidden>‡</span>
+              </label>
+              <div class="auto-note" data-auto-note="dsc" hidden>
+                † Turned on automatically for bandwidth-heavy modes.
+              </div>
+              <div class="note-text" data-note-body="dsc" hidden>
+                ‡ DSC is not required for your selected modes.
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="panel output">
+          <h2>Output</h2>
+          <div class="summary meta" id="meta-summary"></div>
+          <div class="summary" id="summary"></div>
+          <p class="helper footnote" id="notes"></p>
+          <h2>Downloads</h2>
+          <details class="hex-details">
+            <summary>Hex preview</summary>
+            <pre class="hex" id="hex"></pre>
+          </details>
+          <div class="actions">
+            <button class="btn action primary" id="download" type="button" disabled>
+              Download .bin
+            </button>
+            <button class="btn action secondary" id="copy-hex" type="button" disabled>
+              Copy hex
+            </button>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        Made by <a href="https://x.com/goncalossilva">Gonçalo</a> out of frustration with display stacks that should be
+        simpler. MIT-licensed and hosted on <a href="https://github.com/goncalossilva/edid-generator">GitHub</a>.
+      </footer>
+    </div>
+
+    <template id="mode-template">
+      <div class="mode-row">
+        <label>
+          Preset
+          <select data-field="preset">
+            <option value="">Custom</option>
+            <option value="7680x4320">8K</option>
+            <option value="3840x2160">4K</option>
+            <option value="2560x1440">1440p</option>
+            <option value="1920x1080">1080p</option>
+            <option value="1280x720">720p</option>
+          </select>
+        </label>
+        <label>
+          Width
+          <input type="number" min="320" max="7680" value="2560" data-field="width" />
+        </label>
+        <label>
+          Height
+          <input type="number" min="200" max="4320" value="1440" data-field="height" />
+        </label>
+        <label>
+          Refresh (Hz)
+          <input type="number" min="24" max="240" value="60" data-field="refresh" />
+        </label>
+        <button class="btn ghost remove-btn" type="button" data-remove title="Remove mode" aria-label="Remove mode">X</button>
+      </div>
+    </template>
+
+    <script src="assets/js/cta-861-g-vic.js"></script>
+    <script src="assets/js/edid-core.js"></script>
+    <script src="assets/js/app.js"></script>
+  </body>
+</html>
