@@ -290,7 +290,7 @@ function renderOutput(result) {
     },
     {
       label: "Modes",
-      value: features.listedModesOnly ? "Listed only" : "Listed + generated",
+      value: features.listedModesOnly ? "Listed only" : "Expanded (GTF)",
     },
   ];
   const versionMajor = result.bytes && result.bytes.length > 19 ? result.bytes[18] : null;
