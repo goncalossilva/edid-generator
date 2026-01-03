@@ -134,7 +134,9 @@ const cases = [
     hdr: false,
     deepColor: true,
     vrr: false,
-    expectedWarnings: [],
+    expectedWarnings: [
+      "DisplayID modes may be ignored by some HDMI sources. Use DP if missing.",
+    ],
     expectedDecodeWarnings: [],
   },
   {
@@ -169,7 +171,9 @@ const cases = [
     deepColor: true,
     dsc: true,
     vrr: false,
-    expectedWarnings: [],
+    expectedWarnings: [
+      "DisplayID modes may be ignored by some HDMI sources. Use DP if missing.",
+    ],
     expectedDecodeWarnings: [],
   },
   {
@@ -201,6 +205,7 @@ const cases = [
     dsc: true,
     vrr: false,
     expectedWarnings: [
+      "DisplayID modes may be ignored by some HDMI sources. Use DP if missing.",
       "Default mode can't fit base EDID timing limits. Lower resolution or refresh rate, or a fallback will be used.",
     ],
     expectedDecodeWarnings: [
@@ -219,6 +224,7 @@ const cases = [
     dsc: true,
     vrr: false,
     expectedWarnings: [
+      "DisplayID modes may be ignored by some HDMI sources. Use DP if missing.",
       "Default mode can't fit base EDID timing limits. Lower resolution or refresh rate, or a fallback will be used.",
       "No mode fits in the EDID base block. Falling back to 640x480@60.",
     ],
@@ -239,6 +245,7 @@ const cases = [
     dsc: false,
     vrr: false,
     expectedWarnings: [
+      "DisplayID modes may be ignored by some HDMI sources. Use DP if missing.",
       "DSC off, assuming 4:2:0: DSC required by bandwidth but you disabled it.",
     ],
     expectedDecodeWarnings: [],

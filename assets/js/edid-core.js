@@ -1154,6 +1154,9 @@
     const displayIdBlocks = displayIdResult.blocks;
     const displayIdKeys = new Set(displayIdResult.modes.map((info) => info.key));
     const displayIdModes = displayIdResult.modes.map((info) => info.mode);
+    if (displayIdModes.length) {
+      warnings.push("DisplayID modes may be ignored by some HDMI sources. Use DP if missing.");
+    }
 
     const maxClockMHz = maxPixelClockKHz / 1000;
     const rangeMaxClock = Math.min(2550, Math.ceil(maxClockMHz));
