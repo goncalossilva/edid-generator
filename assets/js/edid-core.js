@@ -174,7 +174,7 @@
     }
 
     let dotClock = (hTotal * 1000.0) / hPeriod;
-    dotClock -= dotClock % CVT_CLOCK_STEP;
+    dotClock = Math.round(dotClock / CVT_CLOCK_STEP) * CVT_CLOCK_STEP;
 
     const hSync = dotClock / hTotal;
     const vRefresh = (1000.0 * dotClock) / (hTotal * vTotal);
