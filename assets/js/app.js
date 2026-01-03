@@ -289,8 +289,8 @@ function renderOutput(result) {
         : "Off",
     },
     {
-      label: "Mode list",
-      value: features.listedModesOnly ? "Listed only" : "Listed + inferred",
+      label: "Modes",
+      value: features.listedModesOnly ? "Listed only" : "Listed + generated",
     },
   ];
   const versionMajor = result.bytes && result.bytes.length > 19 ? result.bytes[18] : null;

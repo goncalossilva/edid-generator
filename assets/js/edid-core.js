@@ -1238,7 +1238,7 @@
       `CTA modes: ${advertisedModes.length ? advertisedModes.map(formatMode).join(", ") : "None"}`,
       `DisplayID modes: ${displayIdModes.length ? displayIdModes.map(formatMode).join(", ") : "None"}`,
       `CTA extension: ${audio ? "Audio" : "No audio"}${hdr ? " + HDR10" : ""}`,
-      `Mode list: ${listedModesOnly ? "Listed only" : "Listed + inferred"}`,
+      `Modes: ${listedModesOnly ? "Listed only" : "Listed + generated"}`,
       `Color depth: ${deepColor ? "10-bit" : "8-bit"}`,
       `VRR: ${vrrRange ? `${vrrRange.min}-${vrrRange.max} Hz` : "Off"}`,
       `Required link: ${hdmiVersion}`,
