@@ -892,7 +892,7 @@
         vrrRange = { min, max };
       }
       if (range.min !== min || range.max !== max) {
-        warnings.push("VRR range was clamped to supported limits (24-48 Hz min, 100-240 Hz max).");
+        warnings.push("VRR range clamped to supported limits (24-48 Hz min, 100-240 Hz max).");
       }
     }
 
