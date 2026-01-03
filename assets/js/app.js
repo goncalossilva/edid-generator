@@ -288,6 +288,10 @@ function renderOutput(result) {
         ? `${metadata.vrrRange.min}-${metadata.vrrRange.max} Hz`
         : "Off",
     },
+    {
+      label: "Mode list",
+      value: features.listedModesOnly ? "Listed only" : "Listed + inferred",
+    },
   ];
   const versionMajor = result.bytes && result.bytes.length > 19 ? result.bytes[18] : null;
   const versionMinor = result.bytes && result.bytes.length > 19 ? result.bytes[19] : null;
