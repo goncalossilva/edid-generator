@@ -11,8 +11,8 @@
   const MAX_DTD_PIXEL_CLOCK_KHZ = 655350;
   const MAX_DISPLAYID_DATA_BYTES = 121;
   const DISPLAYID_VERSION = 0x13;
-  const DEFAULT_VENDOR = "EDG";
-  const DEFAULT_NAME = "EDID Generator";
+  const DEFAULT_VENDOR = "GSS";
+  const DEFAULT_NAME = "edid.build";
 
   function formatMode(mode) {
     return `${mode.width}x${mode.height} @ ${mode.refresh}Hz`;
@@ -255,12 +255,12 @@
   }
 
   function nameDescriptor(name) {
-    const text = name.slice(0, 13);
+    const text = name.slice(0, 12);
     const bytes = new Uint8Array(13).fill(0x20);
     for (let i = 0; i < text.length; i += 1) {
       bytes[i] = text.charCodeAt(i);
     }
-    bytes[12] = 0x0a;
+    bytes[Math.min(text.length, 12)] = 0x0a;
     return descriptorBlock(0xfc, bytes);
   }
 
