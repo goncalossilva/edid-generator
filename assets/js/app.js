@@ -5,6 +5,7 @@ const hdrToggle = document.getElementById("hdr-toggle");
 const deepColorToggle = document.getElementById("deep-color-toggle");
 const dscToggle = document.getElementById("dsc-toggle");
 const vrrToggle = document.getElementById("vrr-toggle");
+const listedModesToggle = document.getElementById("listed-modes-toggle");
 const summary = document.getElementById("summary");
 const metaSummary = document.getElementById("meta-summary");
 const hexOutput = document.getElementById("hex");
@@ -347,6 +348,7 @@ function handleGenerate() {
     deepColor: deepColorToggle.checked,
     dsc: dscToggle ? dscToggle.checked : false,
     vrr: vrrToggle.checked,
+    listedModesOnly: listedModesToggle ? listedModesToggle.checked : false,
   };
   let result = generateEdid(settings);
 
@@ -449,6 +451,9 @@ if (dscToggle) {
   });
 }
 vrrToggle.addEventListener("change", handleOptionChange);
+if (listedModesToggle) {
+  listedModesToggle.addEventListener("change", handleOptionChange);
+}
 if (defaultRow) {
   defaultRow.addEventListener("input", handleModeInput);
   wirePresetRow(defaultRow);

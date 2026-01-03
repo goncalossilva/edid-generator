@@ -495,8 +495,10 @@
     return [colorimetry, hdr];
   }
 
-  function buildBaseBlock(preferredDtd, range, name, extensionCount) {
+  function buildBaseBlock(preferredDtd, range, name, extensionCount, options = {}) {
     const base = new Uint8Array(128).fill(0x00);
+    const includeRange = options.includeRange !== false;
+    const supportsGtf = options.supportsGtf !== false;
 
     base.set([0x00, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x00], 0);
     base.set(encodeManufacturerId(DEFAULT_VENDOR), 8);
@@ -515,7 +517,7 @@
     base[21] = 0x00;
     base[22] = 0x00;
     base[23] = 0x78;
-    base[24] = 0x07;
+    base[24] = 0x06 | (supportsGtf ? 0x01 : 0x00);
     base.set(encodeChromaticity(), 25);
     base[35] = 0x00;
     base[36] = 0x00;
@@ -527,7 +529,9 @@
 
     const descriptors = [
       preferredDtd,
-      rangeDescriptor(range.minV, range.maxV, range.minH, range.maxH, range.maxClock),
+      includeRange
+        ? rangeDescriptor(range.minV, range.maxV, range.minH, range.maxH, range.maxClock)
+        : dummyDescriptor(),
       nameDescriptor(name),
       dummyDescriptor(),
     ];
@@ -827,7 +831,8 @@
     return { blocks: [baseBlock, ...extensionBlocks], modes: included, dropped };
   }
 
-  function generateEdid({ defaultMode, modes, audio, hdr, deepColor, vrr, dsc }) {
+  function generateEdid({ defaultMode, modes, audio, hdr, deepColor, vrr, dsc, listedModesOnly }) {
+    const includeRange = !listedModesOnly;
     const warnings = [];
     const modeInfos = [];
     const requestedKeys = new Set(modes.map(modeKey));
@@ -1172,7 +1177,11 @@
       preferredDtd,
       range,
       DEFAULT_NAME,
-      extensionBlocks.length
+      extensionBlocks.length,
+      {
+        includeRange,
+        supportsGtf: includeRange,
+      }
     );
     const edid = new Uint8Array((extensionBlocks.length + 1) * 128);
     edid.set(baseBlock, 0);
