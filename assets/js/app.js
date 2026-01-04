@@ -43,6 +43,7 @@ let dscUserOverride = false;
 let deepColorUserOverride = false;
 let deepColorAuto = false;
 let dscAuto = false;
+const STORAGE_KEY = "edid-generator-state-v1";
 const RESOLUTION_PRESETS = [
   { label: "8K", width: 7680, height: 4320 },
   { label: "4K", width: 3840, height: 2160 },
@@ -101,6 +102,114 @@ function renderStatus(message) {
   if (metaSummary) metaSummary.innerHTML = "";
 }
 
+function readRowValues(row) {
+  if (!row) return null;
+  const width = row.querySelector("[data-field='width']");
+  const height = row.querySelector("[data-field='height']");
+  const refresh = row.querySelector("[data-field='refresh']");
+  return {
+    width: width ? width.value : "",
+    height: height ? height.value : "",
+    refresh: refresh ? refresh.value : "",
+  };
+}
+
+function applyRowValues(row, values) {
+  if (!row || !values || typeof values !== "object") return;
+  const width = row.querySelector("[data-field='width']");
+  const height = row.querySelector("[data-field='height']");
+  const refresh = row.querySelector("[data-field='refresh']");
+  if (width && values.width !== undefined && values.width !== null && values.width !== "") {
+    width.value = values.width;
+  }
+  if (height && values.height !== undefined && values.height !== null && values.height !== "") {
+    height.value = values.height;
+  }
+  if (refresh && values.refresh !== undefined && values.refresh !== null && values.refresh !== "") {
+    refresh.value = values.refresh;
+  }
+}
+
+function hasAnyValue(values) {
+  if (!values || typeof values !== "object") return false;
+  return ["width", "height", "refresh"].some((key) => {
+    const value = values[key];
+    return value !== undefined && value !== null && String(value).trim() !== "";
+  });
+}
+
+function saveState() {
+  if (!window.localStorage) return;
+  const state = {
+    version: 1,
+    defaultMode: readRowValues(defaultRow),
+    extraModes: [...extraModes.querySelectorAll(".mode-row")]
+      .map(readRowValues)
+      .filter(hasAnyValue),
+    options: {
+      audio: audioToggle.checked,
+      hdr: hdrToggle.checked,
+      deepColor: deepColorToggle.checked,
+      dsc: dscToggle ? dscToggle.checked : false,
+      vrr: vrrToggle.checked,
+      listedModesOnly: listedModesToggle ? listedModesToggle.checked : false,
+    },
+    deepColorUserOverride,
+    dscUserOverride,
+  };
+  try {
+    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  } catch (err) {
+    console.warn("Local storage error", err);
+  }
+}
+
+function loadState() {
+  if (!window.localStorage) return;
+  let parsed = null;
+  try {
+    const raw = window.localStorage.getItem(STORAGE_KEY);
+    if (!raw) return;
+    parsed = JSON.parse(raw);
+  } catch (err) {
+    console.warn("Local storage error", err);
+    return;
+  }
+  if (!parsed || typeof parsed !== "object") return;
+
+  const options = parsed.options || {};
+  if (typeof options.audio === "boolean") audioToggle.checked = options.audio;
+  if (typeof options.hdr === "boolean") hdrToggle.checked = options.hdr;
+  if (typeof options.deepColor === "boolean") deepColorToggle.checked = options.deepColor;
+  if (typeof options.dsc === "boolean" && dscToggle) dscToggle.checked = options.dsc;
+  if (typeof options.vrr === "boolean") vrrToggle.checked = options.vrr;
+  if (typeof options.listedModesOnly === "boolean" && listedModesToggle) {
+    listedModesToggle.checked = options.listedModesOnly;
+  }
+
+  applyRowValues(defaultRow, parsed.defaultMode);
+  if (defaultRow) wirePresetRow(defaultRow);
+
+  extraModes.innerHTML = "";
+  if (Array.isArray(parsed.extraModes)) {
+    for (const values of parsed.extraModes) {
+      if (!hasAnyValue(values)) continue;
+      addModeRow(values);
+    }
+  }
+
+  if (typeof parsed.deepColorUserOverride === "boolean") {
+    deepColorUserOverride = parsed.deepColorUserOverride;
+  } else {
+    deepColorUserOverride = Boolean(
+      hdrToggle.checked && deepColorToggle && !deepColorToggle.checked
+    );
+  }
+  if (typeof parsed.dscUserOverride === "boolean") {
+    dscUserOverride = parsed.dscUserOverride;
+  }
+}
+
 function setAutoHint(key, enabled) {
   const hint = autoHints[key];
   if (!hint || !hint.mark || !hint.note) return;
@@ -143,6 +252,12 @@ function wirePresetRow(row) {
     presetSelect.value = match ? `${match.width}x${match.height}` : "";
   };
 
+  if (row.dataset.presetWired === "true") {
+    syncPresetSelect();
+    return;
+  }
+
+  row.dataset.presetWired = "true";
   presetSelect.addEventListener("change", () => {
     if (!presetSelect.value) return;
     const [width, height] = presetSelect.value.split("x").map(Number);
@@ -340,6 +455,7 @@ function handleGenerate() {
     copyHexButton.disabled = true;
     setOptionalHint("dsc", false);
     setOptionalHint("vrr", false);
+    saveState();
     return;
   }
 
@@ -379,6 +495,7 @@ function handleGenerate() {
   );
   const vrrVariants = hasResolutionRefreshVariants(normalized.modes);
   setOptionalHint("vrr", Boolean(vrrToggle.checked && !vrrVariants));
+  saveState();
 }
 
 addModeButton.addEventListener("click", () => {
@@ -463,6 +580,7 @@ if (defaultRow) {
   wirePresetRow(defaultRow);
 }
 extraModes.addEventListener("input", handleModeInput);
+loadState();
 syncDeepColorToggle();
 
 handleGenerate();
