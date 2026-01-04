@@ -2,9 +2,9 @@
 
 A minimal, web-based EDID generator focused on the essentials: choose a default mode, add extra modes, and toggle basic options like audio/HDR/VRR.
 
-## Run
+## Usage
 
-Open `index.html` in a browser. Use the form to generate and download `edid.bin`. Done!
+Open `index.html` in a browser (or head to https://edid.build). Use the form to generate and download `edid.bin`. Done!
 
 ## Development
 
