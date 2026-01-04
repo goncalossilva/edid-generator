@@ -24,7 +24,7 @@ Open `index.html` in a browser (or head to https://edid.build). Use the form to 
 - HDR enables 10-bit color; DSC auto-enables only when required. If DSC is off for extreme modes, the generator assumes 4:2:0 and marks only those CTA VICs as Y420-capable.
 - DisplayID blocks are added as needed; modes are only dropped when they cannot fit in CTA or DisplayID blocks.
 - VRR is opt-in; when enabled without multiple refresh rates per resolution, the UI notes that it won’t engage.
-- "Listed modes only" disables the range descriptor and GTF support so sources stick to the explicit mode list.
+- "Reduce inferred modes" disables the range descriptor and GTF support to limit synthesized modes.
 
 ### Testing
 

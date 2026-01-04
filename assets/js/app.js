@@ -404,8 +404,8 @@ function renderOutput(result) {
         : "Off",
     },
     {
-      label: "Modes",
-      value: features.listedModesOnly ? "Listed only" : "Expanded (GTF)",
+      label: "Inferred modes",
+      value: features.listedModesOnly ? "Reduced (no GTF)" : "Expanded (GTF)",
     },
   ];
   const versionMajor = result.bytes && result.bytes.length > 19 ? result.bytes[18] : null;
