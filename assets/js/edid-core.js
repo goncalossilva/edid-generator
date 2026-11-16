@@ -10,6 +10,8 @@
   const CTA_VIC = root.CTA_VIC || [];
   const MAX_DTD_PIXEL_CLOCK_KHZ = 655350;
   const MAX_DISPLAYID_DATA_BYTES = 121;
+  // The block map has 126 entries; reserve one for the CTA extension.
+  const MAX_DISPLAYID_BLOCKS = 125;
   const DISPLAYID_VERSION = 0x13;
   const DEFAULT_VENDOR = "GSS";
   const DEFAULT_NAME = "edid.build";
@@ -798,7 +800,7 @@
     included.push(...baseTimings);
 
     const extensionBlocks = [];
-    while (remaining.length) {
+    while (remaining.length && extensionBlocks.length < MAX_DISPLAYID_BLOCKS - 1) {
       const chunk = remaining.splice(0, maxExtensionTimings);
       const timingBlock = buildDisplayIdTimingBlock(chunk, preferredKey);
       const extensionBlock = buildDisplayIdExtensionBlock({
@@ -815,6 +817,7 @@
       }
     }
 
+    dropped.push(...remaining);
     const timingBlock = buildDisplayIdTimingBlock(baseTimings, preferredKey);
     const baseBlock = buildDisplayIdExtensionBlock({
       version: DISPLAYID_VERSION,
@@ -1081,7 +1084,9 @@
     if (hdr) dataBlocks.push(...buildHdrBlocks());
 
     const includeCtaPreferred = true;
-    const maxAdditionalDtds = includeCtaPreferred ? 5 : 6;
+    const ctaDataBytes = dataBlocks.reduce((total, block) => total + block.length, 0);
+    const ctaDtdCapacity = Math.floor((127 - 4 - ctaDataBytes) / 18);
+    const maxAdditionalDtds = Math.max(0, ctaDtdCapacity - (includeCtaPreferred ? 1 : 0));
     const additionalDtdInfos = dtdCandidates
       .filter((info) => info !== preferred)
       .filter((info) => !info.vic)
