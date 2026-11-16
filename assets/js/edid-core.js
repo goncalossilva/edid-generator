@@ -24,6 +24,19 @@
     return `${mode.width}x${mode.height}@${mode.refresh}`;
   }
 
+  function validateModes(defaultMode, modes) {
+    const isValid = (mode) => mode &&
+      Number.isInteger(mode.width) && mode.width >= 320 && mode.width <= 7680 &&
+      Number.isInteger(mode.height) && mode.height >= 200 && mode.height <= 4320 &&
+      Number.isInteger(mode.refresh) && mode.refresh >= 24 && mode.refresh <= 240;
+    if (!isValid(defaultMode) || !Array.isArray(modes) || !modes.length || !modes.every(isValid)) {
+      throw new RangeError("Modes must use whole numbers: width 320–7680, height 200–4320, refresh 24–240 Hz.");
+    }
+    if (!modes.some((mode) => modeKey(mode) === modeKey(defaultMode))) {
+      throw new Error("The default mode must be included in the mode list.");
+    }
+  }
+
   function deriveVrrRange(modes) {
     const refreshes = modes.map((mode) => mode.refresh);
     const min = Math.min(...refreshes);
@@ -851,6 +864,7 @@
   }
 
   function generateEdid({ defaultMode, modes, audio, hdr, deepColor, vrr, dsc, listedModesOnly }) {
+    validateModes(defaultMode, modes);
     const includeRange = !listedModesOnly;
     const warnings = [];
     const modeInfos = [];

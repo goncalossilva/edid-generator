@@ -148,6 +148,19 @@ test("link and range budgets cover emitted CVT timings as well as their CTA VICs
   assert.ok(hdmi[6] * 5000 >= 25175, "Always budget the advertised VIC 1 compatibility mode");
 });
 
+test("generation rejects invalid settings before encoding them", () => {
+  for (const invalid of [null, {}, { ...HD, width: 1 }, { ...HD, width: 7681 }, { ...HD, height: 199 }, { ...HD, height: 4321 },
+    { ...HD, refresh: 23 }, { ...HD, refresh: 241 }, { ...HD, width: 1920.5 }, { ...HD, refresh: 59.94 },
+    { ...HD, width: "1920" }, { ...HD, height: NaN }, { ...HD, refresh: Infinity }]) {
+    assert.throws(() => generateEdid({ ...options, defaultMode: invalid, modes: [invalid] }), /Modes must use whole numbers/);
+    assert.throws(() => generateEdid({ ...options, defaultMode: HD, modes: [HD, invalid] }), /Modes must use whole numbers/);
+  }
+  for (const modes of [undefined, null, [], {}]) {
+    assert.throws(() => generateEdid({ ...options, defaultMode: HD, modes }), /Modes must use whole numbers/);
+  }
+  assert.throws(() => generateEdid({ ...options, defaultMode: HD, modes: [UHD] }), /default mode must be included/);
+});
+
 test("validation rejects extra blocks and checks their checksums even if not counted", () => {
   const original = generate().bytes;
   const extra = new Uint8Array(original.length + 128);

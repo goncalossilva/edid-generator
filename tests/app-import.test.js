@@ -132,6 +132,10 @@ class Element extends Events {
     this.parentElement = null;
   }
 
+  click() {
+    this.fire("click");
+  }
+
   querySelector(selector) {
     return this.selectors.get(selector) || this.querySelectorAll(selector)[0] || null;
   }
@@ -142,11 +146,49 @@ class Element extends Events {
   }
 }
 
+class NumberInput extends Element {
+  constructor(min, max) {
+    super();
+    this.min = String(min);
+    this.max = String(max);
+    this.step = ""; // Number inputs default to an integer step when HTML omits it.
+    this.required = false;
+  }
+
+  set value(value) {
+    const text = String(value);
+    // Programmatic number-input assignments sanitize invalid numbers to an empty value.
+    this._value = /^-?(?:\d+(?:\.\d+)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(text)
+      && Number.isFinite(Number(text)) ? text : "";
+  }
+  get value() { return this._value; }
+
+  get validity() {
+    const value = Number(this.value);
+    const hasValue = this.value !== "";
+    const step = Number(this.step) > 0 ? Number(this.step) : 1;
+    const flags = {
+      valueMissing: this.required && !hasValue,
+      rangeUnderflow: hasValue && this.min !== "" && value < Number(this.min),
+      rangeOverflow: hasValue && this.max !== "" && value > Number(this.max),
+      stepMismatch: hasValue && this.step !== "any"
+        && !Number.isInteger((value - Number(this.min || 0)) / step),
+    };
+    return { ...flags, valid: !Object.values(flags).some(Boolean) };
+  }
+
+  checkValidity() {
+    return this.validity.valid;
+  }
+}
+
 function makeRow(values = { width: 2560, height: 1440, refresh: 60 }) {
   const row = new Element();
   row.className = "mode-row";
+  // Match the number-input constraints in index.html, including its implicit step=1.
+  const limits = { width: [320, 7680], height: [200, 4320], refresh: [24, 240] };
   for (const field of ["width", "height", "refresh", "preset"]) {
-    const input = new Element();
+    const input = limits[field] ? new NumberInput(...limits[field]) : new Element();
     input.value = values[field] ?? "";
     row.selectors.set(`[data-field='${field}']`, input);
     row.append(input);
@@ -194,6 +236,8 @@ function createApp({ storedState = oldState, warnings = [], storageFailure = nul
   const writes = [];
   const generated = [];
   const parsed = [];
+  const copied = [];
+  const downloads = [];
   const loggedWarnings = [];
   const storageCalls = [];
   const storageError = Object.assign(new Error("Storage access denied."), { name: "SecurityError" });
@@ -248,7 +292,18 @@ function createApp({ storedState = oldState, warnings = [], storageFailure = nul
     },
   });
   // Execute the entire production script, not extracted/reimplemented handlers.
-  vm.runInNewContext(appSource, { document, window, console: { ...console, warn: (...args) => loggedWarnings.push(args) } }, { filename: "assets/js/app.js" });
+  vm.runInNewContext(appSource, {
+    document,
+    window,
+    console: { ...console, warn: (...args) => loggedWarnings.push(args) },
+    navigator: { clipboard: { async writeText(text) { copied.push(text); } } },
+    Blob,
+    URL: {
+      createObjectURL(blob) { downloads.push(blob); return `blob:test-${downloads.length}`; },
+      revokeObjectURL() {},
+    },
+    setTimeout: (callback) => callback(),
+  }, { filename: "assets/js/app.js" });
 
   const rowValues = (row) => Object.fromEntries(["width", "height", "refresh"].map((field) => [
     field, Number(row.querySelector(`[data-field='${field}']`).value),
@@ -260,7 +315,7 @@ function createApp({ storedState = oldState, warnings = [], storageFailure = nul
   });
   return {
     document, window, nodes, selectors, defaultRow, generated, parsed, writes,
-    loggedWarnings, storageCalls,
+    copied, downloads, loggedWarnings, storageCalls,
     setStorageFailure(failure) { storageFailure = failure; },
     formSettings,
     saved: () => JSON.parse(storage.get(STORAGE_KEY)),
@@ -326,6 +381,92 @@ const invalidDrops = [
     error: /Permission denied/,
   },
 ];
+
+test("invalid default and additional mode edits clear output until the row is fixed", async (t) => {
+  const invalidValues = [
+    ["width", ""], ["width", "not a number"], ["width", "Infinity"], ["width", "0x500"],
+    ["width", 0], ["width", -1], ["width", 1], ["width", 319], ["width", 7681], ["width", 1920.5],
+    ["height", 199], ["height", 4321], ["height", 1080.5],
+    ["refresh", 23], ["refresh", 241], ["refresh", 59.94],
+  ];
+  for (const kind of ["default", "additional"]) {
+    for (const [field, value] of invalidValues) {
+      await t.test(`${kind} ${field}=${JSON.stringify(value)}`, async () => {
+        const app = createApp();
+        const row = kind === "default" ? app.defaultRow : app.nodes["extra-modes"].children[1];
+        const eventTarget = kind === "default" ? row : app.nodes["extra-modes"];
+        const input = row.querySelector(`[data-field='${field}']`);
+        const originalValue = input.value;
+        const originalHex = app.nodes.hex.textContent;
+        const generations = app.generated.length;
+        input.value = value;
+        eventTarget.fire("input");
+
+        assert.equal(app.generated.length, generations, "An invalid row must not be silently omitted");
+        assert.match(app.nodes.summary.textContent,
+          kind === "default" ? /valid default mode/ : /valid additional mode \(row 2\)/);
+        assert.match(app.nodes.summary.textContent, /whole numbers.*limits/);
+        for (const id of ["hex", "notes", "meta-summary"]) assert.equal(app.nodes[id].textContent, "");
+        assert.equal(app.nodes.download.disabled, true);
+        assert.equal(app.nodes["copy-hex"].disabled, true);
+        // Invoke handlers directly too: disabled buttons must not retain stale downloadable data.
+        app.nodes.download.fire("click");
+        app.nodes["copy-hex"].fire("click");
+        await settle();
+        assert.equal(app.downloads.length, 0);
+        assert.equal(app.copied.length, 0);
+        app.nodes["audio-toggle"].fire("change");
+        assert.equal(app.generated.length, generations);
+        assert.equal(app.nodes.download.disabled, true);
+
+        input.value = originalValue;
+        eventTarget.fire("input");
+        assert.ok(app.generated.length > generations);
+        assert.deepEqual(app.generated.at(-1), app.formSettings());
+        assert.notEqual(app.nodes.hex.textContent, originalHex);
+        assert.equal(app.nodes.download.disabled, false);
+        assert.equal(app.nodes["copy-hex"].disabled, false);
+        app.nodes.download.fire("click");
+        app.nodes["copy-hex"].fire("click");
+        await settle();
+        assert.deepEqual(app.copied, [app.nodes.hex.textContent]);
+        assert.equal(app.downloads.length, 1);
+        const downloaded = new Uint8Array(await app.downloads[0].arrayBuffer());
+        assert.equal(downloaded[20], app.generated.length, "Recovery downloads the newly generated output");
+      });
+    }
+  }
+});
+
+test("mode validation honors native input constraints and accepts inclusive limits", () => {
+  const app = createApp({ storedState: null });
+  const width = app.defaultRow.querySelector("[data-field='width']");
+  width.step = "2";
+  width.value = "1921";
+  app.defaultRow.fire("input");
+  assert.equal(app.nodes.download.disabled, true);
+  assert.match(app.nodes.summary.textContent, /valid default mode/);
+  width.value = "1922";
+  app.defaultRow.fire("input");
+  assert.equal(app.nodes.download.disabled, false);
+  assert.equal(app.generated.at(-1).defaultMode.width, 1922);
+
+  const minimum = { width: 320, height: 200, refresh: 24 };
+  const maximum = { width: 7680, height: 4320, refresh: 240 };
+  for (const [field, value] of Object.entries(minimum)) {
+    app.defaultRow.querySelector(`[data-field='${field}']`).value = value;
+  }
+  app.defaultRow.fire("input");
+  app.nodes["add-mode"].fire("click");
+  const extraRow = app.nodes["extra-modes"].children[0];
+  for (const [field, value] of Object.entries(maximum)) {
+    extraRow.querySelector(`[data-field='${field}']`).value = value;
+  }
+  app.nodes["extra-modes"].fire("input");
+  assert.equal(app.nodes.download.disabled, false);
+  assert.equal(app.nodes["copy-hex"].disabled, false);
+  assert.deepEqual(app.generated.at(-1).modes, [minimum, maximum]);
+});
 
 test("storage getter, read and write denials never prevent initial generation or editing", async (t) => {
   for (const storageFailure of ["getter", "getItem", "setItem"]) {

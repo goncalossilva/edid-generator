@@ -295,31 +295,28 @@ function addModeRow(values = {}) {
 }
 
 function readModeRow(row) {
-  const width = Number(row.querySelector("[data-field='width']").value);
-  const height = Number(row.querySelector("[data-field='height']").value);
-  const refresh = Number(row.querySelector("[data-field='refresh']").value);
-  if (!Number.isFinite(width) || !Number.isFinite(height) || !Number.isFinite(refresh)) {
-    return null;
+  const mode = {};
+  for (const field of ["width", "height", "refresh"]) {
+    const input = row.querySelector(`[data-field='${field}']`);
+    const value = Number(input.value);
+    if (!input.checkValidity() || !Number.isFinite(value) || value <= 0) return null;
+    mode[field] = value;
   }
-  if (width <= 0 || height <= 0 || refresh <= 0) {
-    return null;
-  }
-  return {
-    width: Math.round(width),
-    height: Math.round(height),
-    refresh: Math.round(refresh),
-  };
+  return mode;
 }
 
 function readModesFromForm() {
-  const defaultRow = document.querySelector(".mode-row[data-default='true']");
   const defaultMode = readModeRow(defaultRow);
-  const extra = [...extraModes.querySelectorAll(".mode-row")]
-    .map(readModeRow)
-    .filter(Boolean);
-
   if (!defaultMode) {
-    return { defaultMode: null, extraModes: [] };
+    return { error: "Enter a valid default mode using whole numbers within each field's limits." };
+  }
+
+  const extra = [...extraModes.querySelectorAll(".mode-row")].map(readModeRow);
+  const invalidIndex = extra.indexOf(null);
+  if (invalidIndex !== -1) {
+    return {
+      error: `Enter a valid additional mode (row ${invalidIndex + 1}) using whole numbers within each field's limits.`,
+    };
   }
 
   return { defaultMode, extraModes: extra };
@@ -448,18 +445,21 @@ function renderOutput(result) {
 }
 
 function handleGenerate() {
+  lastEdid = null;
+  lastHex = "";
+  hexOutput.textContent = "";
+  notes.textContent = "";
+  downloadButton.disabled = true;
+  copyHexButton.disabled = true;
+
   if (!generateEdid || !formatHex) {
     renderStatus("EDID engine not loaded.");
     return;
   }
 
-  const { defaultMode, extraModes } = readModesFromForm();
-  if (!defaultMode) {
-    renderStatus("Enter a valid default mode.");
-    hexOutput.textContent = "";
-    notes.textContent = "";
-    downloadButton.disabled = true;
-    copyHexButton.disabled = true;
+  const { defaultMode, extraModes, error } = readModesFromForm();
+  if (error) {
+    renderStatus(error);
     setOptionalHint("dsc", false);
     setOptionalHint("vrr", false);
     saveState();
