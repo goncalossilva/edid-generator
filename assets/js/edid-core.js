@@ -978,7 +978,7 @@
       }
     }
 
-    const needsHfVsdb = Boolean(vrrRange) || requiresFrl || dscEnabled;
+    const needsHfVsdb = maxTmdsMhz > 340 || Boolean(vrrRange) || dscEnabled;
     const hdmiVersion =
       requiresFrl || vrrRange || dscEnabled ? "HDMI 2.1" :
       maxTmdsMhz > 340 ? "HDMI 2.0" :

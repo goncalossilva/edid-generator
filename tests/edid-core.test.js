@@ -30,6 +30,22 @@ function extensions(bytes, tag) {
   return blocks;
 }
 
+function ctaData(bytes) {
+  const blocks = [];
+  for (const cta of extensions(bytes, 0x02)) {
+    for (let offset = 4; offset < cta[2];) {
+      const length = cta[offset] & 0x1f;
+      blocks.push({ tag: cta[offset] >> 5, data: [...cta.subarray(offset + 1, offset + 1 + length)] });
+      offset += length + 1;
+    }
+  }
+  return blocks;
+}
+
+function forumBlock(bytes) {
+  return ctaData(bytes).find(({ tag, data }) => tag === 3 && data[0] === 0xd8 && data[1] === 0x5d && data[2] === 0xc4)?.data;
+}
+
 function displayIdModes(bytes) {
   const modes = [];
   for (const block of extensions(bytes, 0x70)) {
@@ -82,4 +98,17 @@ test("DTD field and clock limits do not unnecessarily displace representable mod
   assert.deepEqual(displayIdModes(tooWide.bytes), [{ width: 4096, height: 1440 }]);
   const highClock = generate(HD, [{ width: 3000, height: 1920, refresh: 144 }]);
   assert.deepEqual(displayIdModes(highClock.bytes), [{ width: 3000, height: 1920 }]);
+});
+
+test("4K60 advertises HDMI 2.0 TMDS bandwidth and SCDC without requiring FRL", () => {
+  const result = generate(UHD);
+  const forum = forumBlock(result.bytes);
+  assert.ok(forum, "4K60 needs an HDMI Forum VSDB");
+  assert.ok(forum[4] * 5 >= 594 && forum[4] * 5 <= 600, "TMDS must cover VIC 97's 594 MHz clock");
+  assert.ok(forum[5] & 0x80, "SCDC must be present above 340 MHz");
+  assert.equal(forum[6] >> 4, 0, "HDMI 2.0 TMDS does not require FRL");
+  assert.equal(result.metadata.hdmiVersion, "HDMI 2.0");
+  assert.equal(result.metadata.frlAdvertised, false);
+  assert.equal(forumBlock(generate(HD).bytes), undefined, "1080p60 still needs only the HDMI VSDB");
+  assert.ok(forumBlock(generate(HD, [{ ...UHD, refresh: 120 }]).bytes)[6] >> 4, "Higher bandwidth retains FRL signaling");
 });

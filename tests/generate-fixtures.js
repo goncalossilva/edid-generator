@@ -51,6 +51,20 @@ const cases = [
     expectedDecodeWarnings: [],
   },
   {
+    name: "sdr-4k60-tmds",
+    defaultMode: { width: 3840, height: 2160, refresh: 60 },
+    modes: [
+      { width: 3840, height: 2160, refresh: 60 },
+      { width: 1920, height: 1080, refresh: 60 },
+    ],
+    audio: true,
+    hdr: false,
+    deepColor: false,
+    vrr: false,
+    expectedWarnings: [],
+    expectedDecodeWarnings: [],
+  },
+  {
     name: "hdr-4k60",
     defaultMode: { width: 3840, height: 2160, refresh: 60 },
     modes: [
