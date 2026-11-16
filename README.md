@@ -10,7 +10,7 @@ Open `index.html` in a browser (or head to https://edid.build). Use the form to 
 
 ### How it's built
 
-- Static HTML/CSS/JS with no build step; the EDID engine lives in `assets/edid-core.js`.
+- Static HTML/CSS/JS with no build step; generation lives in `assets/js/edid-core.js` and binary import in `assets/js/edid-import.js`.
 - Outputs an EDID 1.3 base block for HDMI VSDB compatibility (the HDMI VSDB spec targets EDID 1.3).
 - Timings are generated using CVT with automatic reduced blanking when appropriate.
 - CTA-861 VIC mappings come from `data/cta-861-g-vic.json`.
@@ -28,7 +28,13 @@ Open `index.html` in a browser (or head to https://edid.build). Use the form to 
 
 ### Testing
 
-Run the full test suite (Podman/Docker required):
+Run the regression tests (Node.js 22+):
+
+```sh
+node --test tests/*.test.js
+```
+
+Run the full test suite, including generator validation (Podman/Docker required):
 
 ```sh
 ./tests/run-tests.sh

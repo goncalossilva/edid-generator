@@ -26,6 +26,7 @@ if ! command -v node >/dev/null 2>&1; then
   exit 1
 fi
 
+node --test "$root_dir"/tests/*.test.js
 node "$root_dir/tests/generate-fixtures.js"
 
 for edid_file in "$output_dir"/*.bin; do
