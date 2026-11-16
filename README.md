@@ -50,7 +50,7 @@ Validate a single EDID with `edid-decode` (uses Podman/Docker if needed):
 ./tests/check-edid.sh path/to/edid.bin
 ```
 
-The suite runs inside a container and fails on any unexpected generator or edid-decode warnings.
+The suite runs inside a container and fails on any unexpected generator or edid-decode warnings. Regression tests also check decoded timing dimensions, sync polarities, and advertised link capabilities, not just binary conformity.
 
 ## License
 

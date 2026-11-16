@@ -112,3 +112,20 @@ test("4K60 advertises HDMI 2.0 TMDS bandwidth and SCDC without requiring FRL", (
   assert.equal(forumBlock(generate(HD).bytes), undefined, "1080p60 still needs only the HDMI VSDB");
   assert.ok(forumBlock(generate(HD, [{ ...UHD, refresh: 120 }]).bytes)[6] >> 4, "Higher bandwidth retains FRL signaling");
 });
+
+test("link and range budgets cover emitted CVT timings as well as their CTA VICs", () => {
+  for (const mode of [{ width: 720, height: 480, refresh: 240 }, { width: 720, height: 576, refresh: 200 }]) {
+    const { bytes, metadata } = generate(mode);
+    const dtd = readDtd(bytes, 54);
+    const hdmi = ctaData(bytes).find(({ tag, data }) => tag === 3 && data[0] === 3 && data[1] === 0x0c && data[2] === 0).data;
+    assert.ok(hdmi[6] * 5000 >= dtd.clockKHz, "TMDS must cover the emitted CVT DTD, not just the VIC");
+    assert.equal(bytes[75], 0xfd);
+    assert.ok(bytes[81] * 10000 >= dtd.clockKHz, "The range descriptor must cover the emitted clock");
+    assert.ok(metadata.maxPixelClockKHz >= dtd.clockKHz);
+  }
+  const onlyVic = generate({ width: 640, height: 480, refresh: 60 }, [{ width: 720, height: 480, refresh: 240 }]);
+  assert.equal(onlyVic.metadata.maxPixelClockKHz, 108000, "Do not budget a CVT timing that is never emitted");
+  const small = generate({ width: 320, height: 200, refresh: 120 });
+  const hdmi = ctaData(small.bytes).find(({ tag, data }) => tag === 3 && data[0] === 3 && data[1] === 0x0c && data[2] === 0).data;
+  assert.ok(hdmi[6] * 5000 >= 25175, "Always budget the advertised VIC 1 compatibility mode");
+});

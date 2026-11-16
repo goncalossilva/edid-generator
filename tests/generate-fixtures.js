@@ -186,6 +186,28 @@ const cases = [
     expectedDecodeWarnings: [],
   },
   {
+    name: "vic-cvt-clock-480p240",
+    defaultMode: { width: 720, height: 480, refresh: 240 },
+    modes: [{ width: 720, height: 480, refresh: 240 }],
+    audio: true,
+    hdr: false,
+    deepColor: false,
+    vrr: false,
+    expectedWarnings: [],
+    expectedDecodeWarnings: [],
+  },
+  {
+    name: "vic-cvt-clock-576p200",
+    defaultMode: { width: 720, height: 576, refresh: 200 },
+    modes: [{ width: 720, height: 576, refresh: 200 }],
+    audio: true,
+    hdr: false,
+    deepColor: false,
+    vrr: false,
+    expectedWarnings: [],
+    expectedDecodeWarnings: [],
+  },
+  {
     name: "kitchen-sink",
     defaultMode: { width: 3840, height: 2160, refresh: 60 },
     modes: [

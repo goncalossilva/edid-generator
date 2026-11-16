@@ -890,6 +890,44 @@
       maxPixelClockKHz = Math.max(maxPixelClockKHz, vic1.pixclk);
     }
 
+    const dtdCandidates = modeInfos.filter((info) => canEncodeDtd(info.timing));
+    const defaultKey = modeKey(defaultMode);
+    let preferred = dtdCandidates.find((info) => info.key === defaultKey);
+    if (!preferred) {
+      warnings.push(
+        "Default mode can't fit base EDID timing limits. Lower resolution or refresh rate, or a fallback will be used."
+      );
+      preferred = dtdCandidates[0];
+    }
+    if (!preferred) {
+      warnings.push("No mode fits in the EDID base block. Falling back to 640x480@60.");
+      preferred = {
+        mode: { width: 640, height: 480, refresh: 60 },
+        timing: generateCvtTiming(640, 480, 60, false),
+      };
+    }
+    const preferredKey = modeKey(preferred.mode);
+    const preferredDtd = timingToDtd(preferred.timing);
+    const videoBlock = buildVideoDataBlock(modes, defaultMode);
+    const usedVicsSet = new Set(videoBlock ? videoBlock.usedSvds : []);
+
+    // A VIC and its generated DTD/DisplayID timing can have different clocks.
+    // Include each CVT timing that will be advertised before calculating capabilities.
+    const detailedInfos = [preferred, ...modeInfos.filter(
+      (info) => info !== preferred && info.vic && !usedVicsSet.has(info.vic.vic)
+    )];
+    for (const info of detailedInfos) {
+      const timing = info.timing;
+      info.pixelClockKHz = Math.max(info.pixelClockKHz || 0, timing.dotClockKHz);
+      maxPixelClockKHz = Math.max(maxPixelClockKHz, timing.dotClockKHz);
+      minV = Math.min(minV, timing.vRefreshHz);
+      maxV = Math.max(maxV, timing.vRefreshHz);
+      minH = Math.min(minH, timing.hSyncKHz);
+      maxH = Math.max(maxH, timing.hSyncKHz);
+    }
+    const linkInfos = [...modeInfos, preferred];
+    if (vic1) linkInfos.push({ pixelClockKHz: vic1.pixclk });
+
     const unsupported = modeInfos.filter(
       (info) => !info.vic && !canEncodeDtd(info.timing)
     );
@@ -916,7 +954,7 @@
     const bppFull = deepColor ? 30 : 24;
     const bpp420 = deepColor ? 15 : 12;
     const dscTargetBpp = deepColor ? 10 : 8;
-    const linkFull = computeLinkBudgets(modeInfos, bppFull);
+    const linkFull = computeLinkBudgets(linkInfos, bppFull);
     const dscRequired = linkFull.maxFrlRawGbps > FRL_MAX_RAW_GBPS;
     const dscEnabled = Boolean(dsc) && dscRequired;
 
@@ -958,7 +996,7 @@
       return bppFull;
     };
 
-    const linkMetrics = computeLinkBudgets(modeInfos, effectiveBpp);
+    const linkMetrics = computeLinkBudgets(linkInfos, effectiveBpp);
 
     const maxTmdsMhz = linkMetrics.maxTmdsMhz;
     const maxTmdsMhzRounded = Math.ceil(maxTmdsMhz);
@@ -996,40 +1034,7 @@
       }
     }
 
-    const dtdCandidates = modeInfos.filter((info) => canEncodeDtd(info.timing));
-
-    const defaultKey = modeKey(defaultMode);
-
-    let preferred = dtdCandidates.find(
-      (info) => info.key === defaultKey
-    );
-
-    if (!preferred) {
-      warnings.push(
-        "Default mode can't fit base EDID timing limits. Lower resolution or refresh rate, or a fallback will be used."
-      );
-      preferred = dtdCandidates[0];
-    }
-
-    if (!preferred) {
-      warnings.push("No mode fits in the EDID base block. Falling back to 640x480@60.");
-      preferred = {
-        mode: { width: 640, height: 480, refresh: 60 },
-        timing: generateCvtTiming(640, 480, 60, false),
-      };
-    }
-
-    const preferredKey = modeKey(preferred.mode);
-    const preferredDtd = timingToDtd(preferred.timing);
-    if (preferred.timing) {
-      minV = Math.min(minV, preferred.timing.vRefreshHz);
-      maxV = Math.max(maxV, preferred.timing.vRefreshHz);
-      minH = Math.min(minH, preferred.timing.hSyncKHz);
-      maxH = Math.max(maxH, preferred.timing.hSyncKHz);
-    }
-
     const dataBlocks = [];
-    const videoBlock = buildVideoDataBlock(modes, defaultMode);
     if (videoBlock) dataBlocks.push(videoBlock.block);
     if (useY420Fallback && videoBlock) {
       const mapBytes = Math.ceil(videoBlock.usedSvds.length / 8);
@@ -1098,10 +1103,7 @@
       nativeDetailedCount
     );
 
-    const usedVics = videoBlock ? videoBlock.usedSvds : [];
-    const droppedVics = videoBlock ? videoBlock.droppedSvds : [];
-    const usedVicsSet = new Set(usedVics);
-    const droppedVicsSet = new Set(droppedVics);
+    const droppedVicsSet = new Set(videoBlock ? videoBlock.droppedSvds : []);
 
     const keptVdbInfos = modeInfos.filter(
       (info) => info.vic && usedVicsSet.has(info.vic.vic)
