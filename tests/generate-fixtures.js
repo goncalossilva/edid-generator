@@ -186,6 +186,17 @@ const cases = [
     expectedDecodeWarnings: [],
   },
   {
+    name: "progressive-1440x576-100",
+    defaultMode: { width: 1440, height: 576, refresh: 100 },
+    modes: [{ width: 1440, height: 576, refresh: 100 }],
+    audio: true,
+    hdr: false,
+    deepColor: false,
+    vrr: false,
+    expectedWarnings: [],
+    expectedDecodeWarnings: [],
+  },
+  {
     name: "vic-cvt-clock-480p240",
     defaultMode: { width: 720, height: 480, refresh: 240 },
     modes: [{ width: 720, height: 480, refresh: 240 }],

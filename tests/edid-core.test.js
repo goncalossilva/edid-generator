@@ -113,6 +113,19 @@ test("4K60 advertises HDMI 2.0 TMDS bandwidth and SCDC without requiring FRL", (
   assert.ok(forumBlock(generate(HD, [{ ...UHD, refresh: 120 }]).bytes)[6] >> 4, "Higher bandwidth retains FRL signaling");
 });
 
+test("progressive 1440x576@100 does not select an interlaced VIC or underbudget its clock", () => {
+  const mode = { width: 1440, height: 576, refresh: 100 };
+  const { bytes, metadata } = generate(mode);
+  const vics = ctaData(bytes).filter((block) => block.tag === 2).flatMap((block) => block.data);
+  assert.ok(!vics.includes(44) && !vics.includes(45));
+  const dtd = readDtd(bytes, 54);
+  assert.deepEqual([dtd.width, dtd.height, dtd.flags], [1440, 576, 0x1a]);
+  assert.ok(Math.abs(dtd.refresh - 100) < 0.5);
+  assert.ok(metadata.maxPixelClockKHz >= dtd.clockKHz);
+  const hdmi = ctaData(bytes).find(({ tag, data }) => tag === 3 && data[0] === 3 && data[1] === 0x0c && data[2] === 0).data;
+  assert.ok(hdmi[6] * 5000 >= dtd.clockKHz);
+});
+
 test("link and range budgets cover emitted CVT timings as well as their CTA VICs", () => {
   for (const mode of [{ width: 720, height: 480, refresh: 240 }, { width: 720, height: 576, refresh: 200 }]) {
     const { bytes, metadata } = generate(mode);

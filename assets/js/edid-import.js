@@ -19,7 +19,7 @@
     [36, 2, 1024, 768, 70], [36, 1, 1024, 768, 75],
     [36, 0, 1280, 1024, 75], [37, 7, 1152, 870, 75],
   ];
-  // Check the VIC itself: the shared progressive table also mistakenly includes VICs 44/45.
+  // Recognize interlaced VICs even when they are absent from the shared table.
   const INTERLACED_VICS = new Set([5, 6, 7, 10, 11, 20, 21, 22, 25, 26, 39, 40, 44, 45, 46, 50, 51, 54, 55, 58, 59]);
   const PRIORITY = { fallback: 0, detailed: 10, native: 20, displayId: 25, base: 30, cta: 40, preference: 50 };
 
