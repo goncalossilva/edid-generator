@@ -59,6 +59,11 @@ function displayIdModes(bytes) {
   return modes;
 }
 
+function fixBaseChecksum(bytes) {
+  bytes[127] = 0;
+  bytes[127] = (-bytes.subarray(0, 128).reduce((sum, byte) => sum + byte, 0)) & 0xff;
+}
+
 test("base and CTA DTDs encode separate sync with the intended CVT polarities", () => {
   for (const [mode, flags] of [[HD, 0x1a], [{ width: 1024, height: 768, refresh: 60 }, 0x1c]]) {
     const { bytes } = generate(mode);
@@ -141,4 +146,18 @@ test("link and range budgets cover emitted CVT timings as well as their CTA VICs
   const small = generate({ width: 320, height: 200, refresh: 120 });
   const hdmi = ctaData(small.bytes).find(({ tag, data }) => tag === 3 && data[0] === 3 && data[1] === 0x0c && data[2] === 0).data;
   assert.ok(hdmi[6] * 5000 >= 25175, "Always budget the advertised VIC 1 compatibility mode");
+});
+
+test("validation rejects extra blocks and checks their checksums even if not counted", () => {
+  const original = generate().bytes;
+  const extra = new Uint8Array(original.length + 128);
+  extra.set(original);
+  assert.deepEqual(validateEdid(extra).issues, ["Extension count does not match EDID length."]);
+  extra[extra.length - 1] = 1;
+  assert.deepEqual(validateEdid(extra).issues, ["Extension count does not match EDID length.", "Checksum failed in block 2."]);
+  const missing = original.slice();
+  missing[126] += 1;
+  fixBaseChecksum(missing);
+  assert.deepEqual(validateEdid(missing).issues, ["Extension count does not match EDID length."]);
+  assert.deepEqual(validateEdid(original).issues, []);
 });

@@ -1300,11 +1300,11 @@
 
     const extensionCount = bytes[126];
     const expectedLength = (extensionCount + 1) * 128;
-    if (bytes.length < expectedLength) {
+    if (bytes.length !== expectedLength) {
       issues.push("Extension count does not match EDID length.");
     }
 
-    const blocks = Math.min(extensionCount + 1, bytes.length / 128);
+    const blocks = bytes.length / 128;
     for (let blockIndex = 0; blockIndex < blocks; blockIndex += 1) {
       const start = blockIndex * 128;
       const block = bytes.slice(start, start + 128);
