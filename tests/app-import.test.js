@@ -157,7 +157,7 @@ function makeRow(values = { width: 2560, height: 1440, refresh: 60 }) {
   return row;
 }
 
-function createApp({ storedState = oldState, warnings = [] } = {}) {
+function createApp({ storedState = oldState, warnings = [], storageFailure = null } = {}) {
   const nodes = Object.fromEntries([
     "add-mode", "extra-modes", ...Object.values(optionIds), "summary", "meta-summary", "hex",
     "download", "copy-hex", "notes", "drop-overlay", "import-status", "mode-template",
@@ -194,11 +194,23 @@ function createApp({ storedState = oldState, warnings = [] } = {}) {
   const writes = [];
   const generated = [];
   const parsed = [];
-  const window = Object.assign(new Events(), {
-    localStorage: {
-      getItem: (key) => storage.get(key) ?? null,
-      setItem(key, value) { storage.set(key, value); writes.push([key, value]); },
+  const loggedWarnings = [];
+  const storageCalls = [];
+  const storageError = Object.assign(new Error("Storage access denied."), { name: "SecurityError" });
+  const localStorage = {
+    getItem(key) {
+      storageCalls.push("getItem");
+      if (storageFailure === "getItem") throw storageError;
+      return storage.get(key) ?? null;
     },
+    setItem(key, value) {
+      storageCalls.push("setItem");
+      if (storageFailure === "setItem") throw storageError;
+      storage.set(key, value);
+      writes.push([key, value]);
+    },
+  };
+  const window = Object.assign(new Events(), {
     EdidCore: {
       generateEdid(settings) {
         generated.push(clone(settings));
@@ -228,8 +240,15 @@ function createApp({ storedState = oldState, warnings = [] } = {}) {
       },
     },
   });
+  Object.defineProperty(window, "localStorage", {
+    get() {
+      storageCalls.push("getter");
+      if (storageFailure === "getter") throw storageError;
+      return localStorage;
+    },
+  });
   // Execute the entire production script, not extracted/reimplemented handlers.
-  vm.runInNewContext(appSource, { document, window, console }, { filename: "assets/js/app.js" });
+  vm.runInNewContext(appSource, { document, window, console: { ...console, warn: (...args) => loggedWarnings.push(args) } }, { filename: "assets/js/app.js" });
 
   const rowValues = (row) => Object.fromEntries(["width", "height", "refresh"].map((field) => [
     field, Number(row.querySelector(`[data-field='${field}']`).value),
@@ -241,6 +260,8 @@ function createApp({ storedState = oldState, warnings = [] } = {}) {
   });
   return {
     document, window, nodes, selectors, defaultRow, generated, parsed, writes,
+    loggedWarnings, storageCalls,
+    setStorageFailure(failure) { storageFailure = failure; },
     formSettings,
     saved: () => JSON.parse(storage.get(STORAGE_KEY)),
     drag(type, { files = [], types = ["Files"], target = document.body } = {}) {
@@ -305,6 +326,54 @@ const invalidDrops = [
     error: /Permission denied/,
   },
 ];
+
+test("storage getter, read and write denials never prevent initial generation or editing", async (t) => {
+  for (const storageFailure of ["getter", "getItem", "setItem"]) {
+    await t.test(storageFailure, () => {
+      const app = createApp({ storageFailure });
+      assert.ok(app.storageCalls.includes(storageFailure));
+      assert.ok(app.loggedWarnings.length > 0);
+      assert.ok(app.generated.length > 0);
+      assert.ok(app.nodes.hex.textContent);
+      assert.equal(app.nodes.download.disabled, false);
+      assert.equal(app.nodes["copy-hex"].disabled, false);
+      const generations = app.generated.length;
+      const originalHex = app.nodes.hex.textContent;
+      for (const [field, value] of Object.entries(secondMode)) {
+        app.defaultRow.querySelector(`[data-field='${field}']`).value = value;
+      }
+      app.defaultRow.fire("input");
+      assert.ok(app.generated.length > generations);
+      assert.deepEqual(app.generated.at(-1).defaultMode, secondMode);
+      assert.notEqual(app.nodes.hex.textContent, originalHex);
+      assert.equal(app.nodes.download.disabled, false);
+      assert.equal(app.nodes["copy-hex"].disabled, false);
+      assert.ok(app.loggedWarnings.every(([message, error]) =>
+        message === "Local storage error" && error.name === "SecurityError"));
+      if (storageFailure === "getItem") assert.ok(app.writes.length > 0);
+      else assert.equal(app.writes.length, 0);
+    });
+  }
+});
+
+test("storage access revoked after loading does not interrupt later edits", async (t) => {
+  for (const failure of ["getter", "setItem"]) {
+    await t.test(failure, () => {
+      const app = createApp();
+      const generations = app.generated.length;
+      const writes = app.writes.length;
+      app.setStorageFailure(failure);
+      app.defaultRow.querySelector("[data-field='refresh']").value = "75";
+      app.defaultRow.fire("input");
+      assert.ok(app.generated.length > generations);
+      assert.equal(app.generated.at(-1).defaultMode.refresh, 75);
+      assert.equal(app.nodes.download.disabled, false);
+      assert.equal(app.nodes["copy-hex"].disabled, false);
+      assert.equal(app.writes.length, writes);
+      assert.equal(app.loggedWarnings.at(-1)[1].name, "SecurityError");
+    });
+  }
+});
 
 test("HDR automatically enables deep color and shows both hints only while inferred", async (t) => {
   for (const manualChoice of [false, true]) {

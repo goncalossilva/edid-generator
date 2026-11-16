@@ -144,7 +144,6 @@ function hasAnyValue(values) {
 }
 
 function saveState() {
-  if (!window.localStorage) return;
   const state = {
     version: 1,
     defaultMode: readRowValues(defaultRow),
@@ -163,17 +162,20 @@ function saveState() {
     dscUserOverride,
   };
   try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const storage = window.localStorage;
+    if (!storage) return;
+    storage.setItem(STORAGE_KEY, JSON.stringify(state));
   } catch (err) {
     console.warn("Local storage error", err);
   }
 }
 
 function loadState() {
-  if (!window.localStorage) return;
   let parsed = null;
   try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
+    const storage = window.localStorage;
+    if (!storage) return;
+    const raw = storage.getItem(STORAGE_KEY);
     if (!raw) return;
     parsed = JSON.parse(raw);
   } catch (err) {
