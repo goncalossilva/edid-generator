@@ -285,6 +285,12 @@ function assertOverlay(app, visible) {
   assert.equal(app.document.body.classList.contains("file-drag"), visible);
 }
 
+function assertAutoHint(app, key, enabled) {
+  for (const selector of [`[data-auto='${key}']`, `[data-auto-note='${key}']`]) {
+    assert.equal(app.selectors.get(selector).hidden, !enabled, selector);
+  }
+}
+
 const invalidDrops = [
   { name: "no files", files: () => [], error: /one.*file/i },
   { name: "multiple files", files: () => [file(), file({ name: "other.bin" })], error: /one.*file/i },
@@ -299,6 +305,40 @@ const invalidDrops = [
     error: /Permission denied/,
   },
 ];
+
+test("HDR automatically enables deep color and shows both hints only while inferred", async (t) => {
+  for (const manualChoice of [false, true]) {
+    await t.test(`manual deep color ${manualChoice}`, () => {
+      const app = createApp({ storedState: null });
+      assertAutoHint(app, "deep-color", false);
+      app.nodes["hdr-toggle"].checked = true;
+      app.nodes["hdr-toggle"].fire("change");
+      assert.equal(app.nodes["deep-color-toggle"].checked, true);
+      assert.equal(app.generated.at(-1).deepColor, true);
+      assertAutoHint(app, "deep-color", true);
+      app.nodes["deep-color-toggle"].checked = manualChoice;
+      app.nodes["deep-color-toggle"].fire("change");
+      assert.equal(app.generated.at(-1).deepColor, manualChoice);
+      assertAutoHint(app, "deep-color", false);
+      app.nodes["audio-toggle"].fire("change");
+      assertAutoHint(app, "deep-color", false);
+      assertAutoHint(createApp({ storedState: app.saved() }), "deep-color", false);
+    });
+  }
+
+  await t.test("turning HDR off hides inferred hints", () => {
+    const app = createApp({ storedState: null });
+    app.nodes["hdr-toggle"].checked = true;
+    app.nodes["hdr-toggle"].fire("change");
+    assertAutoHint(app, "deep-color", true);
+    app.nodes["hdr-toggle"].checked = false;
+    app.nodes["hdr-toggle"].fire("change");
+    assertAutoHint(app, "deep-color", false);
+    app.nodes["hdr-toggle"].checked = true;
+    app.nodes["hdr-toggle"].fire("change");
+    assertAutoHint(app, "deep-color", true);
+  });
+});
 
 test("nested file drags stay visible until the last leave, and dragover advertises copying", () => {
   const app = createApp();
@@ -387,7 +427,8 @@ test("successful imports replace modes/options, override auto choices, regenerat
   const app = createApp({ warnings });
   assert.equal(app.nodes["deep-color-toggle"].checked, true);
   assert.equal(app.nodes["dsc-toggle"].checked, true);
-  assert.equal(app.selectors.get("[data-auto='dsc']").hidden, false);
+  assertAutoHint(app, "deep-color", true);
+  assertAutoHint(app, "dsc", true);
   const before = app.snapshot();
   app.drag("dragenter");
   const drop = app.drag("drop", { files: [file({ name: "<display>.bin" })] });
@@ -402,10 +443,7 @@ test("successful imports replace modes/options, override auto choices, regenerat
   assert.equal(app.nodes.notes.textContent, "Generator warning.");
   assert.ok(app.writes.length > before.writes);
   assert.equal(app.defaultRow.querySelector("[data-field='preset']").value, "7680x4320");
-  for (const key of ["deep-color", "dsc"]) {
-    assert.equal(app.selectors.get(`[data-auto='${key}']`).hidden, true);
-    assert.equal(app.selectors.get(`[data-auto-note='${key}']`).hidden, true);
-  }
+  for (const key of ["deep-color", "dsc"]) assertAutoHint(app, key, false);
   const status = app.nodes["import-status"];
   assert.equal(status.hidden, false);
   assert.match(status.textContent, /Imported <display>\.bin/);
@@ -418,8 +456,10 @@ test("successful imports replace modes/options, override auto choices, regenerat
   // Imported explicit HDR-without-deep-color and DSC-off choices survive reload/regeneration.
   const reloaded = createApp({ storedState: app.saved() });
   assert.deepEqual(reloaded.formSettings(), importedSettings);
+  assertAutoHint(reloaded, "deep-color", false);
   reloaded.nodes["audio-toggle"].fire("change");
   assert.deepEqual(reloaded.generated.at(-1), importedSettings);
+  assertAutoHint(reloaded, "deep-color", false);
 
   // A second import removes all old alternates and can explicitly enable unnecessary DSC.
   app.drag("drop", { files: [file({ name: "second.bin", marker: 2, size: 32768 })] });

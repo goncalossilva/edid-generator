@@ -17,7 +17,7 @@ const importStatus = document.getElementById("import-status");
 const modeTemplate = document.getElementById("mode-template");
 const defaultRow = document.querySelector(".mode-row[data-default='true']");
 const autoHints = {
-  deepColor: {
+  "deep-color": {
     mark: document.querySelector("[data-auto='deep-color']"),
     note: document.querySelector("[data-auto-note='deep-color']"),
   },
