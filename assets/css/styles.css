@@ -51,11 +51,9 @@
   --ink: #10131a;
   --muted: #4c5566;
   --accent: #ff7a1a;
-  --accent-dark: #d85f00;
   --surface: #ffffff;
   --border: #e2d8c8;
   --shadow: rgba(16, 19, 26, 0.12);
-  --glow: rgba(255, 122, 26, 0.18);
   --control-height: 38px;
   --remove-size: 28px;
   --action-primary: #4a3522;
@@ -153,17 +151,6 @@ h1 {
   margin: 0;
 }
 
-.hero-card {
-  background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: 24px;
-  padding: 20px 24px;
-  box-shadow: 0 20px 60px -40px var(--shadow);
-  min-width: 260px;
-  display: grid;
-  gap: 16px;
-}
-
 .footer {
   margin-top: 28px;
   font-size: 12px;
@@ -180,29 +167,6 @@ h1 {
 
 .footer a:hover {
   color: var(--ink);
-}
-
-.output-card {
-  margin: 16px 0 18px;
-  min-width: 0;
-  padding: 16px 18px;
-  background: #fff7ef;
-  border-color: #f1d4bc;
-  box-shadow: none;
-  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-}
-
-.hero-stat span {
-  font-size: 12px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--muted);
-}
-
-.hero-stat strong {
-  display: block;
-  margin-top: 6px;
-  font-size: 16px;
 }
 
 .layout {
@@ -522,10 +486,6 @@ select {
 @media (max-width: 900px) {
   .hero {
     flex-direction: column;
-  }
-
-  .hero-card {
-    width: 100%;
   }
 }
 
