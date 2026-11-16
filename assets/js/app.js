@@ -12,6 +12,8 @@ const hexOutput = document.getElementById("hex");
 const downloadButton = document.getElementById("download");
 const copyHexButton = document.getElementById("copy-hex");
 const notes = document.getElementById("notes");
+const dropOverlay = document.getElementById("drop-overlay");
+const importStatus = document.getElementById("import-status");
 const modeTemplate = document.getElementById("mode-template");
 const defaultRow = document.querySelector(".mode-row[data-default='true']");
 const autoHints = {
@@ -36,6 +38,7 @@ const optionalHints = {
 };
 
 const { generateEdid, formatHex } = window.EdidCore || {};
+const { parseEdid } = window.EdidImport || {};
 
 let lastEdid = null;
 let lastHex = "";
@@ -43,6 +46,8 @@ let dscUserOverride = false;
 let deepColorUserOverride = false;
 let deepColorAuto = false;
 let dscAuto = false;
+let fileDragDepth = 0;
+let importRequest = 0;
 const STORAGE_KEY = "edid-generator-state-v1";
 const RESOLUTION_PRESETS = [
   { label: "8K", width: 7680, height: 4320 },
@@ -473,7 +478,6 @@ function handleGenerate() {
   let result = generateEdid(settings);
 
   if (result.metadata && !result.metadata.dscRequired) {
-    dscUserOverride = false;
     dscAuto = false;
   }
   if (dscToggle && !dscUserOverride && result.metadata) {
@@ -497,6 +501,102 @@ function handleGenerate() {
   setOptionalHint("vrr", Boolean(vrrToggle.checked && !vrrVariants));
   saveState();
 }
+
+async function importFile(file, request) {
+  try {
+    if (!parseEdid) throw new Error("EDID importer not loaded.");
+    if (file.size < 128 || file.size > 32768 || file.size % 128 !== 0) {
+      throw new Error("Expected a binary EDID file containing 128-byte blocks (up to 32 KiB).");
+    }
+    const bytes = new Uint8Array(await file.arrayBuffer());
+    if (request !== importRequest) return;
+    const { settings, warnings } = parseEdid(bytes);
+
+    applyRowValues(defaultRow, settings.defaultMode);
+    wirePresetRow(defaultRow);
+    extraModes.innerHTML = "";
+    for (const mode of settings.modes) {
+      if (formatMode(mode) !== formatMode(settings.defaultMode)) addModeRow(mode);
+    }
+    audioToggle.checked = settings.audio;
+    hdrToggle.checked = settings.hdr;
+    deepColorToggle.checked = settings.deepColor;
+    vrrToggle.checked = settings.vrr;
+    dscToggle.checked = settings.dsc;
+    listedModesToggle.checked = settings.listedModesOnly;
+    deepColorUserOverride = settings.hdr;
+    dscUserOverride = true;
+    deepColorAuto = false;
+    dscAuto = false;
+    setAutoHint("deep-color", false);
+    handleGenerate();
+
+    showImportStatus([
+      `Imported ${file.name}. Configurator values replaced.`,
+      "Settings only: display identity, exact timings, link limits and unsupported capabilities are not preserved.",
+      ...warnings,
+    ].join("\n"));
+  } catch (err) {
+    if (request !== importRequest) return;
+    showImportStatus(`Could not import ${file.name}: ${err.message}`);
+  }
+}
+
+function showImportStatus(message) {
+  importStatus.textContent = message;
+  importStatus.hidden = false;
+}
+
+function isFileDrag(event) {
+  return Array.from(event.dataTransfer?.types || []).includes("Files");
+}
+
+function setFileDrag(active) {
+  document.body.classList.toggle("file-drag", active);
+  dropOverlay.hidden = !active;
+  if (!active) fileDragDepth = 0;
+}
+
+document.addEventListener("dragenter", (event) => {
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  fileDragDepth += 1;
+  setFileDrag(true);
+});
+
+document.addEventListener("dragover", (event) => {
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  event.dataTransfer.dropEffect = "copy";
+  setFileDrag(true);
+});
+
+document.addEventListener("dragleave", () => {
+  if (fileDragDepth > 0) fileDragDepth -= 1;
+  if (!fileDragDepth) setFileDrag(false);
+});
+
+document.addEventListener("drop", (event) => {
+  setFileDrag(false);
+  if (!isFileDrag(event)) return;
+  event.preventDefault();
+  const request = ++importRequest;
+  const files = event.dataTransfer.files;
+  if (files.length !== 1) {
+    showImportStatus("Drop one binary EDID file at a time. Configurator values are unchanged.");
+    return;
+  }
+  importFile(files[0], request);
+});
+
+document.addEventListener("dragend", () => setFileDrag(false));
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") setFileDrag(false);
+});
+window.addEventListener("blur", () => setFileDrag(false));
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) setFileDrag(false);
+});
 
 addModeButton.addEventListener("click", () => {
   addModeRow();

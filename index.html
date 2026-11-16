@@ -45,6 +45,7 @@
 
       <main class="layout">
         <section class="panel">
+          <p class="helper import-status" id="import-status" role="status" aria-live="polite" aria-atomic="true" hidden></p>
           <div class="mode-block">
             <h2>Default Mode</h2>
             <div class="mode-row" data-default="true">
@@ -166,6 +167,13 @@
       </footer>
     </div>
 
+    <div class="drop-overlay" id="drop-overlay" hidden>
+      <div class="drop-message">
+        <h2>Drop an EDID file</h2>
+        <p>If valid, it will replace the configurator values.</p>
+      </div>
+    </div>
+
     <template id="mode-template">
       <div class="mode-row">
         <label>
@@ -197,6 +205,7 @@
 
     <script src="assets/js/cta-861-g-vic.js"></script>
     <script src="assets/js/edid-core.js"></script>
+    <script src="assets/js/edid-import.js"></script>
     <script src="assets/js/app.js"></script>
   </body>
 </html>

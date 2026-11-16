@@ -89,6 +89,49 @@ body {
   animation: fade-in 0.6s ease-out;
 }
 
+.file-drag .page {
+  filter: opacity(0.25);
+}
+
+.drop-overlay {
+  position: fixed;
+  inset: 24px;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  border: 2px dashed var(--action-primary);
+  border-radius: 20px;
+  background: rgba(246, 242, 234, 0.55);
+  pointer-events: none;
+}
+
+.drop-overlay[hidden] {
+  display: none;
+}
+
+.drop-message {
+  max-width: 400px;
+  text-align: center;
+}
+
+.drop-message h2 {
+  margin: 0 0 12px;
+  font-size: clamp(24px, 4vw, 32px);
+}
+
+.drop-message p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+.import-status {
+  margin: 0 0 24px;
+  overflow-wrap: anywhere;
+}
+
 .hero {
   display: flex;
   gap: 32px;
@@ -483,6 +526,17 @@ select {
 
   .hero-card {
     width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page,
+  .panel {
+    animation: none;
+  }
+
+  .btn {
+    transition: none;
   }
 }
 

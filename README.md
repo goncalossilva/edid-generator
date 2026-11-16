@@ -6,6 +6,10 @@ A minimal, web-based EDID generator focused on the essentials: choose a default 
 
 Open `index.html` in a browser (or head to https://edid.build). Use the form to generate and download `edid.bin`. Done!
 
+To start from an existing EDID, drag one binary EDID file onto the page. A valid file with supported modes replaces the configurator values; invalid files leave them unchanged. Files are processed locally in your browser. Hex text is not supported.
+
+Import is a starting point, not a lossless edit: display identity, exact timings, link limits, and unsupported capabilities are not preserved. Refresh rates are rounded to whole Hz, unsupported modes are skipped with warnings, and output is regenerated using the current generator’s rules. Review the imported settings before using the new EDID.
+
 ## Development
 
 ### How it's built
