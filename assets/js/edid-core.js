@@ -237,9 +237,9 @@
     dtd[15] = 0x00;
     dtd[16] = 0x00;
 
-    let flags = 0x10;
-    if (timing.vSyncPositive) flags |= 0x08;
-    if (timing.hSyncPositive) flags |= 0x04;
+    let flags = 0x18; // Separate digital sync.
+    if (timing.vSyncPositive) flags |= 0x04;
+    if (timing.hSyncPositive) flags |= 0x02;
     dtd[17] = flags;
 
     return dtd;
