@@ -30,6 +30,19 @@ function extensions(bytes, tag) {
   return blocks;
 }
 
+function displayIdModes(bytes) {
+  const modes = [];
+  for (const block of extensions(bytes, 0x70)) {
+    for (let offset = 5; offset < 5 + block[2]; offset += 3 + block[offset + 2]) {
+      if (block[offset] !== 0x03) continue;
+      for (let entry = offset + 3; entry < offset + 3 + block[offset + 2]; entry += 20) {
+        modes.push({ width: 1 + block[entry + 4] + (block[entry + 5] << 8), height: 1 + block[entry + 12] + (block[entry + 13] << 8) });
+      }
+    }
+  }
+  return modes;
+}
+
 test("base and CTA DTDs encode separate sync with the intended CVT polarities", () => {
   for (const [mode, flags] of [[HD, 0x1a], [{ width: 1024, height: 768, refresh: 60 }, 0x1c]]) {
     const { bytes } = generate(mode);
@@ -43,4 +56,30 @@ test("base and CTA DTDs encode separate sync with the intended CVT polarities", 
   const { bytes } = generate(HD, [{ width: 1024, height: 768, refresh: 60 }]);
   const cta = extensions(bytes, 0x02)[0];
   assert.equal(readDtd(cta, cta[2] + 18).flags, 0x1c);
+});
+
+test("dimensions that exceed DTD fields use DisplayID without truncation", () => {
+  for (const mode of [{ width: 5120, height: 1440, refresh: 60 }, { width: 1920, height: 4320, refresh: 30 }]) {
+    const result = generate(mode);
+    const preferred = readDtd(result.bytes, 54);
+    assert.deepEqual([preferred.width, preferred.height], [640, 480]);
+    assert.deepEqual(displayIdModes(result.bytes), [{ width: mode.width, height: mode.height }]);
+    assert.ok(result.warnings.some((warning) => warning.startsWith("Default mode can't fit")));
+    assert.ok(!result.warnings.some((warning) => warning.includes("dropped")));
+    assert.deepEqual(validateEdid(result.bytes).issues, []);
+
+    const withFallback = generate(mode, [HD]);
+    assert.deepEqual(withFallback.preferredMode, HD);
+    assert.deepEqual(displayIdModes(withFallback.bytes), [{ width: mode.width, height: mode.height }]);
+  }
+});
+
+test("DTD field and clock limits do not unnecessarily displace representable modes", () => {
+  const fits = generate({ width: 4088, height: 1440, refresh: 60 });
+  assert.equal(readDtd(fits.bytes, 54).width, 4088);
+  assert.equal(fits.metadata.displayId, null);
+  const tooWide = generate({ width: 4096, height: 1440, refresh: 60 });
+  assert.deepEqual(displayIdModes(tooWide.bytes), [{ width: 4096, height: 1440 }]);
+  const highClock = generate(HD, [{ width: 3000, height: 1920, refresh: 144 }]);
+  assert.deepEqual(displayIdModes(highClock.bytes), [{ width: 3000, height: 1920 }]);
 });

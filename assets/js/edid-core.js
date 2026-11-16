@@ -201,6 +201,22 @@
     };
   }
 
+  function canEncodeDtd(timing) {
+    const fits = (value, max, min = 1) => Number.isInteger(value) && value >= min && value <= max;
+    const hBlank = timing.hTotal - timing.hDisplay;
+    const vBlank = timing.vTotal - timing.vDisplay;
+    const hFrontPorch = timing.hSyncStart - timing.hDisplay;
+    const hSyncWidth = timing.hSyncEnd - timing.hSyncStart;
+    const vFrontPorch = timing.vSyncStart - timing.vDisplay;
+    const vSyncWidth = timing.vSyncEnd - timing.vSyncStart;
+    return fits(Math.round(timing.dotClockKHz / 10), MAX_DTD_PIXEL_CLOCK_KHZ / 10) &&
+      fits(timing.hDisplay, 0xfff) && fits(timing.vDisplay, 0xfff) &&
+      fits(hBlank, 0xfff) && fits(vBlank, 0xfff) &&
+      fits(hFrontPorch, 0x3ff, 0) && fits(hSyncWidth, 0x3ff) &&
+      fits(vFrontPorch, 0x3f, 0) && fits(vSyncWidth, 0x3f) &&
+      hFrontPorch + hSyncWidth <= hBlank && vFrontPorch + vSyncWidth <= vBlank;
+  }
+
   function timingToDtd(timing) {
     const hActive = timing.hDisplay;
     const hBlank = timing.hTotal - timing.hDisplay;
@@ -875,7 +891,7 @@
     }
 
     const unsupported = modeInfos.filter(
-      (info) => !info.vic && info.timing && info.timing.dotClockKHz > MAX_DTD_PIXEL_CLOCK_KHZ
+      (info) => !info.vic && !canEncodeDtd(info.timing)
     );
     const maxModeWidth = modeInfos.reduce(
       (max, info) => Math.max(max, info.mode.width),
@@ -980,7 +996,7 @@
       }
     }
 
-    const dtdCandidates = modeInfos.filter((info) => info.timing.dotClockKHz <= MAX_DTD_PIXEL_CLOCK_KHZ);
+    const dtdCandidates = modeInfos.filter((info) => canEncodeDtd(info.timing));
 
     const defaultKey = modeKey(defaultMode);
 

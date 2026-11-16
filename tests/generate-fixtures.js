@@ -140,6 +140,38 @@ const cases = [
     expectedDecodeWarnings: [],
   },
   {
+    name: "displayid-wide-dimensions",
+    defaultMode: { width: 1920, height: 1080, refresh: 60 },
+    modes: [
+      { width: 1920, height: 1080, refresh: 60 },
+      { width: 5120, height: 1440, refresh: 60 },
+    ],
+    audio: true,
+    hdr: false,
+    deepColor: false,
+    vrr: false,
+    expectedWarnings: [
+      "DisplayID modes may be ignored by some HDMI sources. Use DP if missing.",
+    ],
+    expectedDecodeWarnings: [],
+  },
+  {
+    name: "displayid-tall-dimensions",
+    defaultMode: { width: 1920, height: 1080, refresh: 60 },
+    modes: [
+      { width: 1920, height: 1080, refresh: 60 },
+      { width: 1920, height: 4320, refresh: 30 },
+    ],
+    audio: true,
+    hdr: false,
+    deepColor: false,
+    vrr: false,
+    expectedWarnings: [
+      "DisplayID modes may be ignored by some HDMI sources. Use DP if missing.",
+    ],
+    expectedDecodeWarnings: [],
+  },
+  {
     name: "kitchen-sink",
     defaultMode: { width: 3840, height: 2160, refresh: 60 },
     modes: [
