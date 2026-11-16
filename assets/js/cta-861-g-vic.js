@@ -1,3 +1,5 @@
+// Generated from data/cta-861-g-vic.json. Do not edit.
+// Regenerate with: node scripts/generate-cta-vic.js
 window.CTA_VIC = [
   {
     "aspect": "4:3",

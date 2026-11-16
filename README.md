@@ -30,6 +30,16 @@ Import is a starting point, not a lossless edit: display identity, exact timings
 - VRR is opt-in; when enabled without multiple refresh rates per resolution, the UI notes that it won’t engage.
 - "Reduce inferred modes" disables the range descriptor and GTF support to limit synthesized modes.
 
+### Updating CTA mappings
+
+Edit `data/cta-861-g-vic.json`, then regenerate the checked-in browser table:
+
+```sh
+node scripts/generate-cta-vic.js
+```
+
+The tests check that both tables stay in sync. Serving the website still requires no build step.
+
 ### Testing
 
 Run the regression tests (Node.js 22+):
