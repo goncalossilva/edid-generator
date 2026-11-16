@@ -848,21 +848,14 @@
 
     for (const mode of modes) {
       const vic = findCtaVic(mode);
-      let pixelClockKHz = 0;
-      let hSyncKHz = 0;
-      let timing = null;
-      if (vic) {
-        pixelClockKHz = vic.pixclk;
-        hSyncKHz = vic.hfreq / 1000;
-      } else {
-        const reduced = shouldUseReducedBlanking(mode);
-        timing = generateCvtTiming(mode.width, mode.height, mode.refresh, reduced);
-        pixelClockKHz = timing.dotClockKHz;
-        hSyncKHz = timing.hSyncKHz;
-      }
+      const timing = generateCvtTiming(
+        mode.width, mode.height, mode.refresh, shouldUseReducedBlanking(mode)
+      );
+      const pixelClockKHz = vic ? vic.pixclk : timing.dotClockKHz;
+      const hSyncKHz = vic ? vic.hfreq / 1000 : timing.hSyncKHz;
 
       maxPixelClockKHz = Math.max(maxPixelClockKHz, pixelClockKHz);
-      const refreshHz = timing ? timing.vRefreshHz : vic ? vic.refresh : mode.refresh;
+      const refreshHz = vic ? vic.refresh : timing.vRefreshHz;
       minV = Math.min(minV, refreshHz);
       maxV = Math.max(maxV, refreshHz);
       if (hSyncKHz) {
@@ -987,19 +980,7 @@
       }
     }
 
-    const dtdCandidates = modeInfos
-      .map((info) => {
-        if (info.timing) return info;
-        const reduced = shouldUseReducedBlanking(info.mode);
-        const timing = generateCvtTiming(
-          info.mode.width,
-          info.mode.height,
-          info.mode.refresh,
-          reduced
-        );
-        return { ...info, timing };
-      })
-      .filter((info) => info.timing.dotClockKHz <= MAX_DTD_PIXEL_CLOCK_KHZ);
+    const dtdCandidates = modeInfos.filter((info) => info.timing.dotClockKHz <= MAX_DTD_PIXEL_CLOCK_KHZ);
 
     const defaultKey = modeKey(defaultMode);
 
@@ -1083,21 +1064,17 @@
 
     if (hdr) dataBlocks.push(...buildHdrBlocks());
 
-    const includeCtaPreferred = true;
     const ctaDataBytes = dataBlocks.reduce((total, block) => total + block.length, 0);
     const ctaDtdCapacity = Math.floor((127 - 4 - ctaDataBytes) / 18);
-    const maxAdditionalDtds = Math.max(0, ctaDtdCapacity - (includeCtaPreferred ? 1 : 0));
+    const maxAdditionalDtds = Math.max(0, ctaDtdCapacity - 1);
     const additionalDtdInfos = dtdCandidates
       .filter((info) => info !== preferred)
       .filter((info) => !info.vic)
       .slice(0, maxAdditionalDtds);
     const additionalDtds = additionalDtdInfos.map((info) => timingToDtd(info.timing));
 
-    const ctaDtds = includeCtaPreferred
-      ? [preferredDtd, ...additionalDtds]
-      : additionalDtds;
-    const nativeDetailedCount =
-      includeCtaPreferred && preferredKey === defaultKey ? 1 : 0;
+    const ctaDtds = [preferredDtd, ...additionalDtds];
+    const nativeDetailedCount = preferredKey === defaultKey ? 1 : 0;
     const ctaBlock = buildCtaBlock(
       dataBlocks,
       ctaDtds,
@@ -1135,20 +1112,7 @@
     for (const info of keptNonVicInfos) advertisedKeys.add(info.key);
     const advertisedModes = modes.filter((mode) => advertisedKeys.has(modeKey(mode)));
 
-    const displayIdCandidates = modeInfos.filter(
-      (info) => requestedKeys.has(info.key) && !advertisedKeys.has(info.key)
-    );
-    const displayIdInfos = displayIdCandidates.map((info) => {
-      if (info.timing) return info;
-      const reduced = shouldUseReducedBlanking(info.mode);
-      const timing = generateCvtTiming(
-        info.mode.width,
-        info.mode.height,
-        info.mode.refresh,
-        reduced
-      );
-      return { ...info, timing };
-    });
+    const displayIdInfos = modeInfos.filter((info) => !advertisedKeys.has(info.key));
     const displayIdResult = buildDisplayIdBlocks({
       infos: displayIdInfos,
       preferredMode: defaultMode,
