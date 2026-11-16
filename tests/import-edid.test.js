@@ -343,6 +343,42 @@ test("extracts only supported LPCM, PQ, RGB 10-bit, HDMI VRR, and DSC feature bi
   for (const warning of [/stereo LPCM/, /other than PQ/, /Color depths/, /invalid HDMI VRR/, /chroma restrictions/]) assert.ok(hasWarning(unsupported, warning));
 });
 
+test("requires both PQ and Static Metadata Type 1 in a CTA block to import HDR10", () => {
+  for (const [eotfs, metadata, hdr, warning] of [
+    [0x00, 0x00, false, false],
+    [0x00, 0x01, false, false],
+    [0x02, 0x01, false, false],
+    [0x04, 0x00, false, true],
+    [0x04, 0x02, false, true],
+    [0x04, 0x01, true, false],
+    [0x06, 0x03, true, false],
+  ]) {
+    const result = parseEdid(edid(base(), cta({ blocks: [dataBlock(7, [0x06, eotfs, metadata])] })));
+    const label = `EOTFs=${eotfs}, metadata=${metadata}`;
+    assert.equal(result.settings.hdr, hdr, label);
+    assert.equal(hasWarning(result, /PQ.*Static Metadata Type 1.*HDR10/), warning, label);
+    assert.equal(result.warnings.length, warning ? 1 : 0, label);
+  }
+});
+
+test("unions complete HDR10 advertisements without combining incomplete blocks and groups PQ warnings", () => {
+  const pqOnly = dataBlock(7, [0x06, 0x04, 0x00]);
+  const type1Only = dataBlock(7, [0x06, 0x00, 0x01]);
+  const hdr10 = dataBlock(7, [0x06, 0x04, 0x01]);
+  for (const [blocks, hdr] of [
+    [[pqOnly, type1Only, pqOnly], false],
+    [[hdr10, pqOnly, type1Only, pqOnly], true],
+    [[pqOnly, type1Only, pqOnly, hdr10], true],
+  ]) {
+    for (const extensions of [[cta({ blocks })], blocks.map((block) => cta({ blocks: [block] }))]) {
+      const result = parseEdid(edid(base(), ...extensions));
+      assert.equal(result.settings.hdr, hdr);
+      assert.equal(result.warnings.length, 1);
+      assert.ok(hasWarning(result, /PQ.*Static Metadata Type 1.*HDR10/));
+    }
+  }
+});
+
 test("does not invent basic LPCM support from unsupported LPCM sample formats", () => {
   const result = parseEdid(edid(base(), cta({ blocks: [dataBlock(1, [0x09, 0x04, 0x04])] })));
   assert.equal(result.settings.audio, false);
@@ -469,6 +505,17 @@ test("accepts Uint8Array subviews without mutating the caller's binary", () => {
   const before = buffer.slice();
   assert.deepEqual(parseEdid(buffer.subarray(7, 7 + original.length)).settings.defaultMode, HD);
   assert.deepEqual(buffer, before);
+});
+
+test("regenerates imported HDR settings without adding unsupported HDR10 capabilities", () => {
+  for (const [eotfs, metadata, hdr] of [[0x04, 0x00, false], [0x04, 0x02, false], [0x00, 0x01, false], [0x04, 0x01, true]]) {
+    const imported = parseEdid(edid(base(), cta({ blocks: [dataBlock(7, [0x06, eotfs, metadata])] })));
+    const generated = generateEdid(imported.settings);
+    assert.equal(generated.features.hdr, hdr);
+    const regenerated = parseEdid(generated.bytes);
+    assert.equal(regenerated.settings.hdr, hdr);
+    assert.equal(hasWarning(regenerated, /PQ.*Static Metadata Type 1/), false);
+  }
 });
 
 test("imports generated settings as a starting point, including DisplayID overflow and DSC", () => {

@@ -219,7 +219,10 @@
       const minimum = tag === 0x00 ? 2 : 3;
       if (data.length < minimum) throw new Error("A CTA video capability data block is truncated.");
       if (tag === 0x06) {
-        if (data[1] & 0x04) context.settings.hdr = true;
+        if (data[1] & 0x04) {
+          if (data[2] & 0x01) context.settings.hdr = true;
+          else warn(context, "PQ without Static Metadata Type 1 was not imported as HDR10.");
+        }
         if (data[1] & 0x08) warn(context, "HDR formats other than PQ/HDR10 were not imported.");
       }
     } else if (tag === 0x0d) {
