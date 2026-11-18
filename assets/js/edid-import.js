@@ -42,7 +42,7 @@
     for (let index = 1; index < bytes.length / 128; index += 1) {
       const block = bytes.subarray(index * 128, (index + 1) * 128);
       if (block.every((value, offset) => value === baseBlock[offset])) {
-        warn(context, "An EDID extension repeats the base block instead of containing extension data. Modes may be missing; re-export the complete EDID from the display.");
+        warn(context, "An EDID extension repeats the base block instead of containing extension data. Modes may be missing. Re-export the complete EDID from the display.");
       } else if (block[0] === 0x02) parseCta(block, context);
       else if (block[0] === 0x70) parseDisplayId(block, context);
       else if (block[0] !== 0xf0) warn(context, `Unsupported EDID extension (tag ${hex(block[0])}) was skipped.`);
@@ -205,7 +205,7 @@
       if (oui === 0x000c03) parseHdmi(data, context);
       else if (oui === 0xc45dd8) parseForum(data.subarray(3), context);
       else if (oui === 0x00001a) {
-        warn(context, "AMD FreeSync vendor-specific capabilities (CTA tag 0x03, OUI 0x00001a) were not imported; this block does not establish HDMI VRR support.");
+        warn(context, "AMD FreeSync vendor-specific capabilities (CTA tag 0x03, OUI 0x00001a) were not imported. This block does not establish HDMI VRR support.");
       } else warn(context, `Unsupported CTA vendor-specific capabilities (tag 0x03, OUI ${hex(oui, 6)}) were skipped.`);
     } else if (tag === 4) {
       if (data.length !== 3) throw new Error("A CTA speaker data block has an invalid length.");

@@ -202,7 +202,7 @@ test("recovers usable modes when extensions repeat the base block and warns that
     assert.ok(hasMode(result, 3840, 2160, 120));
     assert.equal(result.settings.modes.some((mode) => mode.width === 5120), false);
     assert.equal(result.warnings.length, 1);
-    assert.ok(hasWarning(result, /extension repeats the base block.*Modes may be missing.*re-export/));
+    assert.ok(hasWarning(result, /extension repeats the base block.*Modes may be missing\. Re-export/));
     assert.deepEqual(bytes, before);
   }
 });
@@ -376,7 +376,7 @@ test("identifies and deduplicates unsupported CTA vendor capabilities without in
   for (const warning of [
     /vendor-specific.*tag 0x03.*OUI 0x123456/,
     /vendor-specific.*tag 0x03.*OUI 0xabcdef/,
-    /AMD FreeSync.*tag 0x03.*OUI 0x00001a.*does not establish HDMI VRR/,
+    /AMD FreeSync.*tag 0x03.*OUI 0x00001a.*were not imported\. This block does not establish HDMI VRR/,
     /vendor-specific video.*Dolby.*OUI 0x00d046.*extended tag 0x01/,
     /vendor-specific video.*OUI 0x123456.*extended tag 0x01/,
     /vendor-specific audio.*Dolby.*OUI 0x00d046.*extended tag 0x11/,
