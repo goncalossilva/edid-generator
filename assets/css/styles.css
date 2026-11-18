@@ -142,6 +142,10 @@ body {
   cursor: pointer;
 }
 
+.import-details:not([open]) summary strong {
+  font-weight: 400;
+}
+
 .hero {
   display: flex;
   gap: 32px;
