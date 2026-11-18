@@ -1,4 +1,5 @@
 const addModeButton = document.getElementById("add-mode");
+const clearButton = document.getElementById("clear");
 const extraModes = document.getElementById("extra-modes");
 const audioToggle = document.getElementById("audio-toggle");
 const hdrToggle = document.getElementById("hdr-toggle");
@@ -540,6 +541,29 @@ async function importFile(file, request) {
   }
 }
 
+function clearConfiguration() {
+  // A pending file read must not replace the fresh configuration.
+  importRequest += 1;
+  setFileDrag(false);
+  extraModes.innerHTML = "";
+  for (const field of ["width", "height", "refresh"]) {
+    const input = defaultRow.querySelector(`[data-field='${field}']`);
+    input.value = input.defaultValue;
+  }
+  wirePresetRow(defaultRow);
+  for (const toggle of [audioToggle, hdrToggle, deepColorToggle, dscToggle, vrrToggle, listedModesToggle]) {
+    toggle.checked = toggle.defaultChecked;
+  }
+  deepColorUserOverride = false;
+  dscUserOverride = false;
+  deepColorAuto = false;
+  dscAuto = false;
+  syncDeepColorToggle();
+  handleGenerate();
+  showImportStatus("Configuration cleared. Defaults restored.");
+  defaultRow.querySelector("[data-field='width']").focus();
+}
+
 function showImportStatus(message, warnings) {
   importStatus.textContent = "";
   const headline = document.createElement("strong");
@@ -610,6 +634,8 @@ window.addEventListener("blur", () => setFileDrag(false));
 document.addEventListener("visibilitychange", () => {
   if (document.hidden) setFileDrag(false);
 });
+
+clearButton.addEventListener("click", clearConfiguration);
 
 addModeButton.addEventListener("click", () => {
   addModeRow();

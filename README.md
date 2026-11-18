@@ -8,6 +8,8 @@ Open `index.html` in a browser (or head to https://edid.build). Use the form to 
 
 Modes use whole numbers: width 320–7680, height 200–4320, and refresh 24–240 Hz. Invalid rows must be corrected before downloading.
 
+Use **Clear** beside **Output** to start over: restore the default 4K60 mode and options, remove additional modes, and replace the saved configuration.
+
 To start from an existing EDID, drag one binary EDID file onto the page. A valid file with supported modes replaces the configurator values; invalid files leave them unchanged. Files are processed locally in your browser. Hex text is not supported.
 
 Import is a starting point, not a lossless edit: display identity, exact timings, link limits, and unsupported capabilities are not preserved. Refresh rates are rounded to whole Hz, unsupported modes are skipped with warnings, and output is regenerated using the current generator’s rules. Review the imported settings before using the new EDID.

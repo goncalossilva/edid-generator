@@ -76,16 +76,19 @@ class Events {
 }
 
 class Element extends Events {
-  constructor(tagName = "div") {
+  constructor(tagName = "div", ownerDocument = null) {
     super();
     this.tagName = tagName.toUpperCase();
+    this.ownerDocument = ownerDocument;
     this.children = [];
     this.selectors = new Map();
     this.dataset = {};
     this.hidden = false;
     this.open = false;
+    this.defaultChecked = false;
     this.checked = false;
     this.disabled = false;
+    this.defaultValue = "";
     this.value = "";
     this.textContent = "";
     const classes = new Set();
@@ -138,6 +141,10 @@ class Element extends Events {
     this.fire("click");
   }
 
+  focus() {
+    this.ownerDocument.activeElement = this;
+  }
+
   querySelector(selector) {
     return this.selectors.get(selector) || this.querySelectorAll(selector)[0] || null;
   }
@@ -149,8 +156,8 @@ class Element extends Events {
 }
 
 class NumberInput extends Element {
-  constructor(min, max) {
-    super();
+  constructor(min, max, ownerDocument) {
+    super("input", ownerDocument);
     this.min = String(min);
     this.max = String(max);
     this.step = ""; // Number inputs default to an integer step when HTML omits it.
@@ -184,56 +191,60 @@ class NumberInput extends Element {
   }
 }
 
-function makeRow(values = { width: 2560, height: 1440, refresh: 60 }) {
-  const row = new Element();
+function makeRow(values = { width: 2560, height: 1440, refresh: 60 }, ownerDocument) {
+  const row = new Element("div", ownerDocument);
   row.className = "mode-row";
   // Match the number-input constraints in index.html, including its implicit step=1.
   const limits = { width: [320, 7680], height: [200, 4320], refresh: [24, 240] };
   for (const field of ["width", "height", "refresh", "preset"]) {
-    const input = limits[field] ? new NumberInput(...limits[field]) : new Element();
-    input.value = values[field] ?? "";
+    const input = limits[field]
+      ? new NumberInput(...limits[field], ownerDocument) : new Element("select", ownerDocument);
+    input.defaultValue = String(values[field] ?? "");
+    input.value = input.defaultValue;
     row.selectors.set(`[data-field='${field}']`, input);
     row.append(input);
   }
-  const remove = new Element();
+  const remove = new Element("button", ownerDocument);
   row.selectors.set("[data-remove]", remove);
   row.append(remove);
   return row;
 }
 
 function createApp({ storedState = oldState, warnings = [], storageFailure = null } = {}) {
+  const document = new Events();
   const nodes = Object.fromEntries([
-    "add-mode", "extra-modes", ...Object.values(optionIds), "summary", "meta-summary", "hex",
+    "add-mode", "clear", "extra-modes", ...Object.values(optionIds), "summary", "meta-summary", "hex",
     "download", "copy-hex", "notes", "drop-overlay", "import-status", "mode-template",
-  ].map((id) => [id, new Element()]));
-  nodes["audio-toggle"].checked = true;
+  ].map((id) => [id, new Element("div", document)]));
+  nodes["audio-toggle"].defaultChecked = nodes["audio-toggle"].checked = true;
   for (const id of ["drop-overlay", "import-status"]) nodes[id].hidden = true;
   for (const id of ["download", "copy-hex"]) nodes[id].disabled = true;
-  const defaultRow = makeRow({ width: 3840, height: 2160, refresh: 60 });
+  const defaultRow = makeRow({ width: 3840, height: 2160, refresh: 60 }, document);
   const selectors = new Map([[".mode-row[data-default='true']", defaultRow]]);
   for (const selector of [
     "[data-auto='deep-color']", "[data-auto-note='deep-color']", "[data-auto='dsc']", "[data-auto-note='dsc']",
     "[data-note='dsc']", "[data-note-body='dsc']", "[data-note='vrr']", "[data-note-body='vrr']",
   ]) {
-    const hint = new Element();
+    const hint = new Element("span", document);
     hint.hidden = true;
     selectors.set(selector, hint);
   }
   nodes["mode-template"].content = {
     cloneNode() {
-      const fragment = new Element();
+      const fragment = new Element("div", document);
       fragment.isFragment = true;
-      fragment.append(makeRow());
+      fragment.append(makeRow(undefined, document));
       return fragment;
     },
   };
-  const document = Object.assign(new Events(), {
-    body: new Element(),
+  Object.assign(document, {
+    body: new Element("body", document),
     hidden: false,
     getElementById: (id) => nodes[id] || null,
     querySelector: (selector) => selectors.get(selector) || null,
-    createElement: (tagName) => new Element(tagName),
+    createElement: (tagName) => new Element(tagName, document),
   });
+  document.activeElement = document.body;
   const storage = new Map([[STORAGE_KEY, JSON.stringify(storedState)]]);
   const writes = [];
   const generated = [];
@@ -369,6 +380,14 @@ function assertAutoHint(app, key, enabled) {
   }
 }
 
+function assertClearStatus(app) {
+  const status = app.nodes["import-status"];
+  assert.equal(status.hidden, false);
+  assert.deepEqual(status.children.map((node) => [node.tagName, node.textContent]), [
+    ["STRONG", "Configuration cleared. Defaults restored."],
+  ]);
+}
+
 const invalidDrops = [
   { name: "no files", files: () => [], error: /one.*file/i },
   { name: "multiple files", files: () => [file(), file({ name: "other.bin" })], error: /one.*file/i },
@@ -470,7 +489,8 @@ test("mode validation honors native input constraints and accepts inclusive limi
   assert.deepEqual(app.generated.at(-1).modes, [minimum, maximum]);
 });
 
-test("storage getter, read and write denials never prevent initial generation or editing", async (t) => {
+test("storage getter, read and write denials never prevent initial generation, editing or clearing", async (t) => {
+  const startup = createApp({ storedState: null });
   for (const storageFailure of ["getter", "getItem", "setItem"]) {
     await t.test(storageFailure, () => {
       const app = createApp({ storageFailure });
@@ -491,6 +511,16 @@ test("storage getter, read and write denials never prevent initial generation or
       assert.notEqual(app.nodes.hex.textContent, originalHex);
       assert.equal(app.nodes.download.disabled, false);
       assert.equal(app.nodes["copy-hex"].disabled, false);
+      const editedGenerations = app.generated.length;
+      app.nodes.clear.click();
+      assert.ok(app.generated.length > editedGenerations);
+      assert.deepEqual(app.formSettings(), startup.formSettings());
+      assert.deepEqual(app.generated.at(-1), startup.formSettings());
+      assert.ok(app.nodes.hex.textContent);
+      assert.equal(app.nodes.download.disabled, false);
+      assert.equal(app.nodes["copy-hex"].disabled, false);
+      assertClearStatus(app);
+      assert.equal(app.document.activeElement, app.defaultRow.querySelector("[data-field='width']"));
       assert.ok(app.loggedWarnings.every(([message, error]) =>
         message === "Local storage error" && error.name === "SecurityError"));
       if (storageFailure === "getItem") assert.ok(app.writes.length > 0);
@@ -499,7 +529,8 @@ test("storage getter, read and write denials never prevent initial generation or
   }
 });
 
-test("storage access revoked after loading does not interrupt later edits", async (t) => {
+test("storage access revoked after loading does not interrupt later edits or clearing", async (t) => {
+  const startup = createApp({ storedState: null });
   for (const failure of ["getter", "setItem"]) {
     await t.test(failure, () => {
       const app = createApp();
@@ -510,6 +541,13 @@ test("storage access revoked after loading does not interrupt later edits", asyn
       app.defaultRow.fire("input");
       assert.ok(app.generated.length > generations);
       assert.equal(app.generated.at(-1).defaultMode.refresh, 75);
+      assert.equal(app.nodes.download.disabled, false);
+      assert.equal(app.nodes["copy-hex"].disabled, false);
+      app.nodes.clear.click();
+      assert.deepEqual(app.formSettings(), startup.formSettings());
+      assert.deepEqual(app.generated.at(-1), startup.formSettings());
+      assertClearStatus(app);
+      assert.ok(app.nodes.hex.textContent);
       assert.equal(app.nodes.download.disabled, false);
       assert.equal(app.nodes["copy-hex"].disabled, false);
       assert.equal(app.writes.length, writes);
@@ -701,6 +739,150 @@ test("successful imports without warnings show only a literal bold filename", as
   assert.deepEqual(status.children.map((node) => node.tagName), ["STRONG"]);
   assert.equal(status.children[0].textContent, `Imported ${name}.`);
   assert.equal(status.children[0].children.length, 0, "The filename must remain literal text");
+});
+
+test("clear replaces imported settings and warnings with persisted startup defaults", async (t) => {
+  const startup = createApp({ storedState: null });
+  for (const [marker, settings] of [[1, importedSettings], [2, secondSettings]]) {
+    await t.test(`import ${marker}`, async () => {
+      const app = createApp({ warnings: ["Imported capability omitted."] });
+      app.drag("drop", { files: [file({ marker })] });
+      await settle();
+      assert.deepEqual(app.formSettings(), settings);
+      assert.match(app.nodes["import-status"].textContent, /Imported capability omitted/);
+      const before = app.snapshot();
+      app.drag("dragenter");
+      app.drag("dragenter");
+
+      app.nodes.clear.click();
+
+      assert.deepEqual(app.formSettings(), startup.formSettings());
+      assert.equal(app.nodes["extra-modes"].children.length, 0);
+      assert.equal(app.defaultRow.querySelector("[data-field='preset']").value, "3840x2160");
+      assert.deepEqual(app.generated.at(-1), startup.formSettings());
+      assert.ok(app.generated.length > before.generations);
+      assert.notEqual(app.nodes.hex.textContent, before.output[2]);
+      assert.equal(app.nodes.download.disabled, false);
+      assert.equal(app.nodes["copy-hex"].disabled, false);
+      for (const id of ["summary", "meta-summary", "notes"]) {
+        assert.equal(app.nodes[id].textContent, startup.nodes[id].textContent);
+      }
+      assert.deepEqual(app.snapshot().hints, startup.snapshot().hints);
+      assertClearStatus(app);
+      assert.equal(app.document.activeElement, app.defaultRow.querySelector("[data-field='width']"));
+      assertOverlay(app, false);
+      app.drag("dragenter");
+      app.drag("dragleave");
+      assertOverlay(app, false);
+      assert.ok(app.writes.length > before.writes);
+      assert.deepEqual(app.saved(), startup.saved());
+
+      const reloaded = createApp({ storedState: app.saved() });
+      assert.deepEqual(reloaded.formSettings(), startup.formSettings());
+      assert.deepEqual(reloaded.generated.at(-1), startup.formSettings());
+      assert.deepEqual(reloaded.snapshot().hints, startup.snapshot().hints);
+      assert.equal(reloaded.nodes["import-status"].hidden, true);
+    });
+  }
+});
+
+test("clear recovers invalid default and additional modes with usable new output", async (t) => {
+  const startup = createApp({ storedState: null });
+  for (const kind of ["default", "additional"]) {
+    await t.test(kind, async () => {
+      const app = createApp();
+      const row = kind === "default" ? app.defaultRow : app.nodes["extra-modes"].children[0];
+      row.querySelector("[data-field='width']").value = "";
+      (kind === "default" ? row : app.nodes["extra-modes"]).fire("input");
+      assert.equal(app.nodes.download.disabled, true);
+      assert.equal(app.nodes["copy-hex"].disabled, true);
+      assert.equal(app.nodes.hex.textContent, "");
+      const generations = app.generated.length;
+
+      app.nodes.clear.click();
+
+      assert.deepEqual(app.formSettings(), startup.formSettings());
+      assert.deepEqual(app.generated.at(-1), startup.formSettings());
+      assert.ok(app.generated.length > generations);
+      assert.equal(app.nodes.download.disabled, false);
+      assert.equal(app.nodes["copy-hex"].disabled, false);
+      assert.ok(app.nodes.hex.textContent);
+      assert.equal(app.nodes.summary.textContent, startup.nodes.summary.textContent);
+      assertClearStatus(app);
+      assert.equal(app.document.activeElement, app.defaultRow.querySelector("[data-field='width']"));
+      assert.deepEqual(app.saved(), startup.saved());
+      assert.deepEqual(createApp({ storedState: app.saved() }).formSettings(), startup.formSettings());
+      app.nodes.download.click();
+      app.nodes["copy-hex"].click();
+      await settle();
+      assert.deepEqual(app.copied, [app.nodes.hex.textContent]);
+      assert.equal(app.downloads.length, 1);
+      const downloaded = new Uint8Array(await app.downloads[0].arrayBuffer());
+      assert.equal(downloaded[20], app.generated.length, "Clear downloads the regenerated defaults");
+    });
+  }
+});
+
+test("clear restores deep color and DSC automation immediately and after reload", async (t) => {
+  const app = createApp();
+  app.drag("drop", { files: [file()] });
+  await settle();
+  assert.equal(app.nodes["deep-color-toggle"].checked, false);
+  assert.equal(app.nodes["dsc-toggle"].checked, false);
+  for (const key of ["deep-color", "dsc"]) assertAutoHint(app, key, false);
+  app.nodes.clear.click();
+  const reloaded = createApp({ storedState: app.saved() });
+
+  for (const [name, target] of [["immediately", app], ["after reload", reloaded]]) {
+    await t.test(name, () => {
+      target.nodes["hdr-toggle"].checked = true;
+      target.nodes["hdr-toggle"].fire("change");
+      assert.equal(target.nodes["deep-color-toggle"].checked, true);
+      assert.equal(target.generated.at(-1).deepColor, true);
+      assertAutoHint(target, "deep-color", true);
+      const preset = target.defaultRow.querySelector("[data-field='preset']");
+      preset.value = "7680x4320";
+      preset.fire("change");
+      assert.equal(target.nodes["dsc-toggle"].checked, true);
+      assert.equal(target.generated.at(-1).dsc, true);
+      assertAutoHint(target, "dsc", true);
+      preset.value = "3840x2160";
+      preset.fire("change");
+      assert.equal(target.nodes["dsc-toggle"].checked, false);
+      assert.equal(target.generated.at(-1).dsc, false);
+      assertAutoHint(target, "dsc", false);
+    });
+  }
+});
+
+test("clear supersedes pending successful, invalid and failed file reads", async (t) => {
+  const startup = createApp({ storedState: null });
+  const completions = {
+    successful: (read) => read.resolve(fileBytes(1)),
+    invalid: (read) => read.resolve(fileBytes(0)),
+    failed: (read) => read.reject(new Error("Read failed after clear.")),
+  };
+  for (const [name, complete] of Object.entries(completions)) {
+    await t.test(name, async () => {
+      const app = createApp({ warnings: ["Stale import warning."] });
+      const read = deferred();
+      app.drag("drop", { files: [file({ read: () => read.promise })] });
+      app.nodes.clear.click();
+      assert.deepEqual(app.formSettings(), startup.formSettings());
+      assertClearStatus(app);
+      const cleared = app.snapshot();
+
+      complete(read);
+      await settle();
+
+      assert.deepEqual(app.snapshot(), cleared);
+      assertClearStatus(app);
+      assert.equal(app.document.activeElement, app.defaultRow.querySelector("[data-field='width']"));
+      app.drag("drop", { files: [file({ marker: 2 })] });
+      await settle();
+      assert.deepEqual(app.formSettings(), secondSettings, "New imports still work after clear");
+    });
+  }
 });
 
 test("out-of-order reads cannot replace a newer successful drop", async () => {

@@ -225,6 +225,14 @@ h1 {
   gap: 16px;
 }
 
+.output-header {
+  margin-bottom: 12px;
+}
+
+.output-header h2 {
+  margin: 0;
+}
+
 .mode-row {
   display: flex;
   flex-wrap: wrap;
