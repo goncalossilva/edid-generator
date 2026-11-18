@@ -226,6 +226,7 @@ h1 {
 }
 
 .output-header {
+  min-height: var(--control-height);
   margin-bottom: 12px;
 }
 

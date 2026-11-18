@@ -217,7 +217,7 @@ function createApp({ storedState = oldState, warnings = [], storageFailure = nul
     "download", "copy-hex", "notes", "drop-overlay", "import-status", "mode-template",
   ].map((id) => [id, new Element("div", document)]));
   nodes["audio-toggle"].defaultChecked = nodes["audio-toggle"].checked = true;
-  for (const id of ["drop-overlay", "import-status"]) nodes[id].hidden = true;
+  for (const id of ["clear", "drop-overlay", "import-status"]) nodes[id].hidden = true;
   for (const id of ["download", "copy-hex"]) nodes[id].disabled = true;
   const defaultRow = makeRow({ width: 3840, height: 2160, refresh: 60 }, document);
   const selectors = new Map([[".mode-row[data-default='true']", defaultRow]]);
@@ -343,6 +343,7 @@ function createApp({ storedState = oldState, warnings = [], storageFailure = nul
           .map(([key, node]) => [key, node.hidden]),
         output: ["summary", "meta-summary", "hex", "notes"].map((id) => nodes[id].textContent),
         disabled: [nodes.download.disabled, nodes["copy-hex"].disabled],
+        clearHidden: nodes.clear.hidden,
         storage: [...storage],
         writes: writes.length,
         generations: generated.length,
@@ -381,6 +382,7 @@ function assertAutoHint(app, key, enabled) {
 }
 
 function assertClearStatus(app) {
+  assert.equal(app.nodes.clear.hidden, true);
   const status = app.nodes["import-status"];
   assert.equal(status.hidden, false);
   assert.deepEqual(status.children.map((node) => [node.tagName, node.textContent]), [
@@ -741,6 +743,76 @@ test("successful imports without warnings show only a literal bold filename", as
   assert.equal(status.children[0].children.length, 0, "The filename must remain literal text");
 });
 
+test("clear stays hidden for fresh and restored defaults, but not saved changes", () => {
+  const startup = createApp({ storedState: null });
+  assert.equal(startup.nodes.clear.hidden, true);
+  assert.equal(createApp({ storedState: startup.saved() }).nodes.clear.hidden, true);
+  assert.equal(createApp().nodes.clear.hidden, false);
+  for (const storageFailure of ["getter", "getItem", "setItem"]) {
+    assert.equal(createApp({ storedState: null, storageFailure }).nodes.clear.hidden, true);
+  }
+});
+
+test("clear visibility follows edits, invalid modes and additional rows", () => {
+  const app = createApp({ storedState: null });
+  for (const [field, value] of [["width", 1920], ["height", 1080], ["refresh", 75], ["width", ""]]) {
+    const input = app.defaultRow.querySelector(`[data-field='${field}']`);
+    input.value = value;
+    app.defaultRow.fire("input");
+    assert.equal(app.nodes.clear.hidden, false, `${field}=${value}`);
+    input.value = input.defaultValue;
+    app.defaultRow.fire("input");
+    assert.equal(app.nodes.clear.hidden, true);
+  }
+  app.defaultRow.querySelector("[data-field='refresh']").value = "60.0";
+  app.defaultRow.fire("input");
+  assert.equal(app.nodes.clear.hidden, true, "Equivalent numeric values are still defaults");
+  app.nodes["audio-toggle"].checked = false;
+  app.nodes["audio-toggle"].fire("change");
+  assert.equal(app.nodes.clear.hidden, false);
+  app.nodes["audio-toggle"].checked = true;
+  app.nodes["audio-toggle"].fire("change");
+  assert.equal(app.nodes.clear.hidden, true);
+
+  for (const id of Object.values(optionIds)) {
+    app.nodes[id].checked = !app.nodes[id].defaultChecked;
+    app.nodes[id].fire("change");
+    assert.equal(app.nodes.clear.hidden, false, id);
+    app.nodes.clear.click();
+    assertClearStatus(app);
+  }
+  app.nodes["add-mode"].click();
+  assert.equal(app.nodes.clear.hidden, false);
+  const row = app.nodes["extra-modes"].children[0];
+  for (const field of ["width", "height", "refresh"]) row.querySelector(`[data-field='${field}']`).value = "";
+  app.nodes["extra-modes"].fire("input");
+  assert.equal(app.nodes.clear.hidden, false, "An empty additional row can still be cleared");
+  row.querySelector("[data-remove]").click();
+  assert.equal(app.nodes.clear.hidden, true);
+});
+
+test("clear visibility accounts for automatic DSC and explicit overrides", () => {
+  const app = createApp({ storedState: null });
+  const preset = app.defaultRow.querySelector("[data-field='preset']");
+  preset.value = "7680x4320";
+  preset.fire("change");
+  assert.equal(app.nodes["dsc-toggle"].checked, true);
+  assert.equal(app.nodes.clear.hidden, false);
+  preset.value = "3840x2160";
+  preset.fire("change");
+  assert.equal(app.nodes["dsc-toggle"].checked, false);
+  assert.equal(app.nodes.clear.hidden, true, "Visibility uses the final auto-adjusted options");
+
+  for (const checked of [true, false]) {
+    app.nodes["dsc-toggle"].checked = checked;
+    app.nodes["dsc-toggle"].fire("change");
+  }
+  assert.equal(app.nodes.clear.hidden, false, "Clear can restore explicitly disabled automation");
+  assert.equal(createApp({ storedState: app.saved() }).nodes.clear.hidden, false);
+  app.nodes.clear.click();
+  assertClearStatus(app);
+});
+
 test("clear replaces imported settings and warnings with persisted startup defaults", async (t) => {
   const startup = createApp({ storedState: null });
   for (const [marker, settings] of [[1, importedSettings], [2, secondSettings]]) {
@@ -749,6 +821,7 @@ test("clear replaces imported settings and warnings with persisted startup defau
       app.drag("drop", { files: [file({ marker })] });
       await settle();
       assert.deepEqual(app.formSettings(), settings);
+      assert.equal(app.nodes.clear.hidden, false);
       assert.match(app.nodes["import-status"].textContent, /Imported capability omitted/);
       const before = app.snapshot();
       app.drag("dragenter");
@@ -782,6 +855,7 @@ test("clear replaces imported settings and warnings with persisted startup defau
       assert.deepEqual(reloaded.generated.at(-1), startup.formSettings());
       assert.deepEqual(reloaded.snapshot().hints, startup.snapshot().hints);
       assert.equal(reloaded.nodes["import-status"].hidden, true);
+      assert.equal(reloaded.nodes.clear.hidden, true);
     });
   }
 });

@@ -446,6 +446,7 @@ function renderOutput(result) {
 }
 
 function handleGenerate() {
+  syncClearButton();
   lastEdid = null;
   lastHex = "";
   hexOutput.textContent = "";
@@ -502,6 +503,7 @@ function handleGenerate() {
   );
   const vrrVariants = hasResolutionRefreshVariants(normalized.modes);
   setOptionalHint("vrr", Boolean(vrrToggle.checked && !vrrVariants));
+  syncClearButton();
   saveState();
 }
 
@@ -539,6 +541,17 @@ async function importFile(file, request) {
     if (request !== importRequest) return;
     showImportStatus(`Could not import ${file.name}: ${err.message}`);
   }
+}
+
+function syncClearButton() {
+  const modeChanged = ["width", "height", "refresh"].some((field) => {
+    const input = defaultRow.querySelector(`[data-field='${field}']`);
+    return Number(input.value) !== Number(input.defaultValue);
+  });
+  const optionsChanged = [audioToggle, hdrToggle, deepColorToggle, dscToggle, vrrToggle, listedModesToggle]
+    .some((toggle) => toggle.checked !== toggle.defaultChecked);
+  clearButton.hidden = !modeChanged && !optionsChanged && !extraModes.querySelector(".mode-row")
+    && !deepColorUserOverride && !dscUserOverride;
 }
 
 function clearConfiguration() {
