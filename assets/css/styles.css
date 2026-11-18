@@ -171,7 +171,7 @@ h1 {
 
 .layout {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(300px, 100%), 1fr));
   gap: 24px;
 }
 
@@ -414,7 +414,8 @@ select {
   flex-direction: column;
   gap: 4px;
   padding: 10px 16px;
-  border-radius: 999px;
+  border-radius: 14px;
+  overflow-wrap: anywhere;
   background: #fff4e8;
   border: 1px solid #f1d4bc;
   max-width: 100%;
