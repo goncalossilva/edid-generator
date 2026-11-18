@@ -37,12 +37,15 @@
       dtds: [],
       preferences: [],
     };
-    parseBase(bytes.subarray(0, 128), context);
+    const baseBlock = bytes.subarray(0, 128);
+    parseBase(baseBlock, context);
     for (let index = 1; index < bytes.length / 128; index += 1) {
       const block = bytes.subarray(index * 128, (index + 1) * 128);
-      if (block[0] === 0x02) parseCta(block, context);
+      if (block.every((value, offset) => value === baseBlock[offset])) {
+        warn(context, "An EDID extension repeats the base block instead of containing extension data. Modes may be missing; re-export the complete EDID from the display.");
+      } else if (block[0] === 0x02) parseCta(block, context);
       else if (block[0] === 0x70) parseDisplayId(block, context);
-      else if (block[0] !== 0xf0) warn(context, "Unsupported EDID extensions were skipped.");
+      else if (block[0] !== 0xf0) warn(context, `Unsupported EDID extension (tag ${hex(block[0])}) was skipped.`);
     }
     applyPreferences(context);
     if (!context.modes.size) throw new Error("No usable progressive modes were found in this EDID.");
@@ -134,7 +137,7 @@
     }
     if (!offset) requireZero(block.subarray(4, 127), "A CTA extension has nonzero padding.");
     if (revision > 3) {
-      warn(context, "An unsupported CTA extension revision was skipped.");
+      warn(context, `An unsupported CTA extension revision ${revision} was skipped.`);
       return;
     }
     const firstCta = !context.ctaSeen;
@@ -198,17 +201,19 @@
       }
     } else if (tag === 3) {
       if (data.length < 3) throw new Error("A CTA vendor data block is truncated.");
-      const oui = data[0] | (data[1] << 8) | (data[2] << 16);
+      const oui = little24(data, 0);
       if (oui === 0x000c03) parseHdmi(data, context);
       else if (oui === 0xc45dd8) parseForum(data.subarray(3), context);
-      else warn(context, "Unsupported vendor-specific capabilities were skipped.");
+      else if (oui === 0x00001a) {
+        warn(context, "AMD FreeSync vendor-specific capabilities (CTA tag 0x03, OUI 0x00001a) were not imported; this block does not establish HDMI VRR support.");
+      } else warn(context, `Unsupported CTA vendor-specific capabilities (tag 0x03, OUI ${hex(oui, 6)}) were skipped.`);
     } else if (tag === 4) {
       if (data.length !== 3) throw new Error("A CTA speaker data block has an invalid length.");
       if (data[0] !== 1 || data[1] || data[2]) warn(context, "Multichannel speaker information was not imported.");
     } else if (tag === 7) {
       parseCtaExtended(data, context);
     } else {
-      warn(context, "Unsupported CTA data blocks were skipped.");
+      warn(context, `Unsupported CTA data block (tag ${hex(tag)}) was skipped.`);
     }
   }
 
@@ -225,6 +230,12 @@
         }
         if (data[1] & 0x08) warn(context, "HDR formats other than PQ/HDR10 were not imported.");
       }
+    } else if (tag === 0x01 || tag === 0x11) {
+      if (data.length < 4) throw new Error("A CTA extended vendor data block is truncated.");
+      const oui = little24(data, 1);
+      const kind = tag === 0x01 ? "video" : "audio";
+      const vendor = oui === 0x00d046 ? "Dolby, " : "";
+      warn(context, `CTA vendor-specific ${kind} capabilities (${vendor}OUI ${hex(oui, 6)}, extended tag ${hex(tag)}) were not imported.`);
     } else if (tag === 0x0d) {
       if (data.length < 2) throw new Error("A CTA video preference data block is empty.");
       context.preferences.push(...data.subarray(1));
@@ -235,7 +246,7 @@
       if (tag === 0x0e && data.length < 2) throw new Error("A CTA 4:2:0 video data block is empty.");
       warn(context, "YCbCr 4:2:0-only modes and chroma restrictions were not imported.");
     } else {
-      warn(context, "Unsupported CTA data blocks were skipped.");
+      warn(context, `Unsupported CTA extended data block (tag ${hex(tag)}) was skipped.`);
     }
   }
 
@@ -266,7 +277,7 @@
   function parseForum(data, context) {
     if (data.length < 4 || [6, 8, 9].includes(data.length)) throw new Error("An HDMI Forum capability data block is truncated.");
     if (data[0] !== 1) {
-      warn(context, "An unsupported HDMI Forum capability version was skipped.");
+      warn(context, `An unsupported HDMI Forum capability version ${data[0]} was skipped.`);
       return;
     }
     // The 4:2:0 and DSC-specific 10-bit flags do not establish uncompressed RGB 10-bit support.
@@ -286,7 +297,7 @@
     if (sum(block.subarray(1, end + 1)) !== 0) throw new Error("A DisplayID payload checksum is invalid.");
     requireZero(block.subarray(end + 1, 127), "A DisplayID extension has nonzero padding.");
     const supported = [0x10, 0x11, 0x12, 0x13, 0x20].includes(block[1]);
-    if (!supported) warn(context, "An unsupported DisplayID version was skipped.");
+    if (!supported) warn(context, `An unsupported DisplayID version ${hex(block[1])} was skipped.`);
     for (let index = 5; index < end;) {
       if (isZero(block.subarray(index, end))) break;
       if (index + 3 > end || index + 3 + block[index + 2] > end) {
@@ -308,7 +319,7 @@
       if (!data.length || data.length % size) throw new Error("A DisplayID detailed timing block has an invalid length.");
       const blockRevision = revision & 0x07;
       if ((type1 && revision > 1) || (type7 && (blockRevision > 2 || (revision & 0x80)))) {
-        warn(context, "Unsupported DisplayID timing revisions were skipped.");
+        warn(context, `An unsupported DisplayID timing revision (tag ${hex(tag)}, revision ${hex(revision)}) was skipped.`);
         return;
       }
       for (let index = 0; index < data.length; index += size) {
@@ -339,7 +350,7 @@
       if (data.length !== 10) throw new Error("A DisplayID interface block has an invalid length.");
       if (data[2] & 0x04) context.settings.deepColor = true;
     } else if (![0x00, 0x0a, 0x0b, 0x20].includes(tag)) {
-      warn(context, "Unsupported DisplayID data blocks were skipped.");
+      warn(context, `Unsupported DisplayID data block (tag ${hex(tag)}, revision ${hex(revision)}) was skipped.`);
     }
   }
 
@@ -368,7 +379,7 @@
       return null;
     }
     if (!entry) {
-      warn(context, "Unrecognized CTA video modes were skipped.");
+      warn(context, `Unrecognized CTA video mode (VIC ${vic}) was skipped.`);
       return null;
     }
     return addMode(context, entry.width, entry.height, entry.refresh, priority);
@@ -390,6 +401,14 @@
 
   function little16(bytes, offset) {
     return bytes[offset] | (bytes[offset + 1] << 8);
+  }
+
+  function little24(bytes, offset) {
+    return little16(bytes, offset) | (bytes[offset + 2] << 16);
+  }
+
+  function hex(value, width = 2) {
+    return `0x${value.toString(16).padStart(width, "0")}`;
   }
 
   function sum(bytes) {

@@ -182,7 +182,35 @@ test("accepts at most 256 checksum-validated blocks and groups unknown extension
   checksum(extension);
   const result = parseEdid(edid(base(), ...Array(255).fill(extension)));
   assert.deepEqual(result.settings.defaultMode, HD);
-  assert.deepEqual(result.warnings, ["Unsupported EDID extensions were skipped."]);
+  assert.deepEqual(result.warnings, ["Unsupported EDID extension (tag 0x99) was skipped."]);
+});
+
+test("recovers usable modes when extensions repeat the base block and warns that modes may be missing", () => {
+  const first = base({ revision: 4, timings: [dtd({ width: 3440, height: 1440, hBlank: 160, vBlank: 60 })] });
+  const video = cta({ blocks: [dataBlock(2, [118, 97])], flags: 0x81 });
+  const expected = parseEdid(edid(first, video));
+  for (const extensions of [[video, first], [first, video, first]]) {
+    const bytes = edid(first, ...extensions);
+    extensions.forEach((extension, index) => {
+      // Repeat the final base block, including its extension count and checksum.
+      if (extension === first) bytes.set(bytes.subarray(0, 128), (index + 1) * 128);
+    });
+    const before = bytes.slice();
+    const result = parseEdid(bytes);
+    assert.deepEqual(result.settings, expected.settings);
+    assert.deepEqual(result.settings.defaultMode, { width: 3440, height: 1440, refresh: 60 });
+    assert.ok(hasMode(result, 3840, 2160, 120));
+    assert.equal(result.settings.modes.some((mode) => mode.width === 5120), false);
+    assert.equal(result.warnings.length, 1);
+    assert.ok(hasWarning(result, /extension repeats the base block.*Modes may be missing.*re-export/));
+    assert.deepEqual(bytes, before);
+  }
+});
+
+test("does not mistake a different base-like block for a byte-for-byte duplicate", () => {
+  const result = parseEdid(edid(base(), base()));
+  assert.deepEqual(result.settings.modes, [HD]);
+  assert.deepEqual(result.warnings, ["Unsupported EDID extension (tag 0x00) was skipped."]);
 });
 
 test("rejects unsupported EDID versions without rejecting sensible earlier 1.x files", () => {
@@ -243,9 +271,10 @@ test("rounds fractional refresh, deduplicates rounded modes, and warns when skip
   const result = parseEdid(edid(base({
     timings: [dtd({ refresh: 59.94 }), dtd(), dtd({ width: 640, height: 480, refresh: 300 }), dtd({ interlaced: true })],
     established: [0, 0x10, 0],
-  }), cta({ blocks: [dataBlock(2, [5, 6, 254])] })));
+  }), cta({ blocks: [dataBlock(2, [5, 6, 254, 254, 255])] })));
   assert.deepEqual(result.settings.modes, [HD]);
-  for (const warning of [/Fractional refresh/, /Interlaced/, /outside the supported/, /Unrecognized CTA/]) assert.ok(hasWarning(result, warning));
+  for (const warning of [/Fractional refresh/, /Interlaced/, /outside the supported/, /CTA video mode.*VIC 254/, /CTA video mode.*VIC 255/]) assert.ok(hasWarning(result, warning));
+  assert.equal(result.warnings.filter((warning) => /Unrecognized CTA/.test(warning)).length, 2);
   assert.equal(result.warnings.filter((warning) => /Interlaced/.test(warning)).length, 1);
   const tiny = parseEdid(base({ timings: [dtd(), dtd({ width: 256 }), dtd({ height: 128 }), dtd({ refresh: 10 })] }));
   assert.deepEqual(tiny.settings.modes, [HD]);
@@ -322,6 +351,66 @@ test("rejects structurally truncated known CTA data blocks", () => {
   }
 });
 
+test("requires complete OUIs before diagnosing CTA extended vendor blocks", () => {
+  for (const tag of [0x01, 0x11]) {
+    for (const oui of [[], [0x46], [0x46, 0xd0]]) {
+      const block = dataBlock(7, [tag, ...oui]);
+      assert.throws(() => parseEdid(edid(base(), cta({ blocks: [block] }))), /extended vendor data block is truncated/);
+    }
+  }
+});
+
+test("identifies and deduplicates unsupported CTA vendor capabilities without inferring features", () => {
+  const blocks = [
+    dataBlock(3, [0x56, 0x34, 0x12]),
+    dataBlock(3, [0xef, 0xcd, 0xab]),
+    dataBlock(3, [0x1a, 0, 0, 1, 0, 48, 165, 0]),
+    dataBlock(7, [0x01, 0x46, 0xd0, 0x00, 0x81, 0, 0, 0, 0]),
+    dataBlock(7, [0x01, 0x56, 0x34, 0x12]),
+    dataBlock(7, [0x11, 0x46, 0xd0, 0x00]),
+  ];
+  const result = parseEdid(edid(base(), cta({ blocks }), cta({ blocks })));
+  assert.deepEqual(result.settings.modes, [HD]);
+  for (const feature of ["audio", "hdr", "deepColor", "vrr", "dsc"]) assert.equal(result.settings[feature], false, feature);
+  assert.equal(result.warnings.length, 6);
+  for (const warning of [
+    /vendor-specific.*tag 0x03.*OUI 0x123456/,
+    /vendor-specific.*tag 0x03.*OUI 0xabcdef/,
+    /AMD FreeSync.*tag 0x03.*OUI 0x00001a.*does not establish HDMI VRR/,
+    /vendor-specific video.*Dolby.*OUI 0x00d046.*extended tag 0x01/,
+    /vendor-specific video.*OUI 0x123456.*extended tag 0x01/,
+    /vendor-specific audio.*Dolby.*OUI 0x00d046.*extended tag 0x11/,
+  ]) assert.ok(hasWarning(result, warning), warning.toString());
+});
+
+test("identifies unknown extension and CTA block tags while grouping repeated identifiers", () => {
+  const extensions = [0x99, 0x98].map((tag) => {
+    const bytes = new Uint8Array(128);
+    bytes[0] = tag;
+    return checksum(bytes);
+  });
+  const blocks = [dataBlock(0, [1]), dataBlock(5, [1]), dataBlock(7, [0x07, 1]), dataBlock(7, [0x7f, 1])];
+  const result = parseEdid(edid(base(), ...extensions, ...extensions, cta({ blocks }), cta({ blocks })));
+  assert.deepEqual(result.settings.modes, [HD]);
+  assert.equal(result.warnings.length, 6);
+  for (const warning of [
+    /EDID extension.*tag 0x99/,
+    /EDID extension.*tag 0x98/,
+    /CTA data block.*tag 0x00/,
+    /CTA data block.*tag 0x05/,
+    /CTA extended data block.*tag 0x07/,
+    /CTA extended data block.*tag 0x7f/,
+  ]) assert.ok(hasWarning(result, warning), warning.toString());
+});
+
+test("identifies unsupported CTA extension revisions and groups repeats", () => {
+  const result = parseEdid(edid(base(), ...[4, 5, 4].map((revision) => cta({ revision }))));
+  assert.deepEqual(result.settings.modes, [HD]);
+  assert.equal(result.warnings.length, 2);
+  assert.ok(hasWarning(result, /unsupported CTA extension revision 4/));
+  assert.ok(hasWarning(result, /unsupported CTA extension revision 5/));
+});
+
 test("extracts only supported LPCM, PQ, RGB 10-bit, HDMI VRR, and DSC feature bits", () => {
   const blocks = [
     dataBlock(1, [0x09, 0x07, 0x07]),
@@ -392,7 +481,7 @@ test("decodes the HDMI Forum sink capability block and full 10-bit VRR maximum",
   const unknown = parseEdid(edid(base(), cta({ blocks: [dataBlock(3, [0xd8, 0x5d, 0xc4, 2, 120, 0x80, 0x60, 0, 48, 144, 0x80, 0x63, 0])] })));
   assert.equal(unknown.settings.vrr, false);
   assert.equal(unknown.settings.dsc, false);
-  assert.ok(hasWarning(unknown, /unsupported HDMI Forum/));
+  assert.ok(hasWarning(unknown, /unsupported HDMI Forum capability version 2/));
 });
 
 test("rejects partial HDMI Forum fields and bounds-checks optional HDMI latency/video sections", () => {
@@ -421,7 +510,7 @@ test("unknown extensions, vendors, and significant unsupported capability blocks
   blockMap[0] = 0xf0;
   checksum(blockMap);
   const result = parseEdid(edid(base(), blockMap, unknown, cta({ blocks: [
-    dataBlock(3, [0x1a, 0, 0, 1, 48, 144]), // An AMD range is not HDMI VRR.
+    dataBlock(3, [0x1a, 0, 0, 1, 0, 48, 144, 0]), // An AMD range is not HDMI VRR.
     dataBlock(7, [7, 0, 0]),
     dataBlock(7, [0x0e, 97]),
     dataBlock(7, [0x0f, 1]),
@@ -429,7 +518,7 @@ test("unknown extensions, vendors, and significant unsupported capability blocks
   assert.equal(result.settings.vrr, false);
   assert.equal(result.settings.hdr, false);
   assert.equal(hasMode(result, 3840, 2160, 60), false);
-  for (const warning of [/Unsupported EDID/, /vendor-specific/, /Unsupported CTA/, /chroma restrictions/]) assert.ok(hasWarning(result, warning));
+  for (const warning of [/EDID extension.*tag 0x99/, /AMD FreeSync.*OUI 0x00001a/, /CTA extended data block.*tag 0x07/, /chroma restrictions/]) assert.ok(hasWarning(result, warning));
   assert.deepEqual(parseEdid(edid(base(), blockMap)).warnings, []);
 });
 
@@ -447,6 +536,17 @@ test("imports independent DisplayID 1.3 Type I timings, preference, and explicit
   assert.equal(result.settings.modes.length, 3);
   const interfaceOnly = parseEdid(edid(base(), displayId([displayBlock(0x0f, [0x71, 0x21, 4, 0, 0, 0, 0, 0, 0, 0])])));
   assert.equal(interfaceOnly.settings.deepColor, true);
+});
+
+test("imports explicit 5120x2160 timings from valid DisplayID 1.3 and 2.0 extensions", () => {
+  const mode = { width: 5120, height: 2160, refresh: 165 };
+  for (const [version, tag, type7] of [[0x13, 0x03, false], [0x20, 0x22, true]]) {
+    const timing = displayTiming({ ...mode, type7 });
+    const result = parseEdid(edid(base({ flags: 0 }), displayId([displayBlock(tag, timing)], version)));
+    assert.deepEqual(result.settings.defaultMode, mode);
+    assert.deepEqual(result.settings.modes, [mode, HD]);
+    assert.deepEqual(result.warnings, []);
+  }
 });
 
 test("DisplayID 2.0 Type VII uses 1-kHz clocks and revision-specific preferred/4:2:0 flags", () => {
@@ -468,10 +568,10 @@ test("skips unsupported DisplayID timings, revisions, and versions without inven
     displayBlock(4, Array(11).fill(0)),
   ])));
   assert.deepEqual(result.settings.modes, [HD]);
-  for (const warning of [/Interlaced/, /timing revisions/, /Unsupported DisplayID data/]) assert.ok(hasWarning(result, warning));
+  for (const warning of [/Interlaced/, /timing revision.*tag 0x03.*revision 0x02/, /DisplayID data block.*tag 0x04.*revision 0x00/]) assert.ok(hasWarning(result, warning));
   const unknown = parseEdid(edid(base(), displayId([displayBlock(0x22, displayTiming({ type7: true }))], 0x21)));
   assert.deepEqual(unknown.settings.modes, [HD]);
-  assert.ok(hasWarning(unknown, /unsupported DisplayID version/));
+  assert.ok(hasWarning(unknown, /unsupported DisplayID version 0x21/));
 });
 
 test("validates DisplayID payload checksums separately from EDID checksums, bounds, and timing lengths", () => {

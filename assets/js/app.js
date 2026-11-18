@@ -533,19 +533,30 @@ async function importFile(file, request) {
     setAutoHint("deep-color", false);
     handleGenerate();
 
-    showImportStatus([
-      `Imported ${file.name}. Configurator values replaced.`,
-      "Settings only: display identity, exact timings, link limits and unsupported capabilities are not preserved.",
-      ...warnings,
-    ].join("\n"));
+    showImportStatus(`Imported ${file.name}${warnings.length ? " with warnings" : ""}.`, warnings);
   } catch (err) {
     if (request !== importRequest) return;
     showImportStatus(`Could not import ${file.name}: ${err.message}`);
   }
 }
 
-function showImportStatus(message) {
-  importStatus.textContent = message;
+function showImportStatus(message, warnings) {
+  importStatus.textContent = "";
+  const headline = document.createElement("strong");
+  headline.textContent = message;
+  if (warnings?.length) {
+    const details = document.createElement("details");
+    details.className = "import-details";
+    const heading = document.createElement("summary");
+    heading.appendChild(headline);
+    const diagnostics = document.createElement("div");
+    diagnostics.className = "import-warnings";
+    diagnostics.textContent = warnings.join("\n");
+    details.append(heading, diagnostics);
+    importStatus.appendChild(details);
+  } else {
+    importStatus.appendChild(headline);
+  }
   importStatus.hidden = false;
 }
 

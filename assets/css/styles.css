@@ -130,6 +130,18 @@ body {
   overflow-wrap: anywhere;
 }
 
+.import-status strong {
+  color: var(--ink);
+}
+
+.import-warnings {
+  margin-top: 10px;
+}
+
+.import-details summary {
+  cursor: pointer;
+}
+
 .hero {
   display: flex;
   gap: 32px;

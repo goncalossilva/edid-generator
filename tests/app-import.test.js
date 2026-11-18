@@ -76,12 +76,14 @@ class Events {
 }
 
 class Element extends Events {
-  constructor() {
+  constructor(tagName = "div") {
     super();
+    this.tagName = tagName.toUpperCase();
     this.children = [];
     this.selectors = new Map();
     this.dataset = {};
     this.hidden = false;
+    this.open = false;
     this.checked = false;
     this.disabled = false;
     this.value = "";
@@ -230,7 +232,7 @@ function createApp({ storedState = oldState, warnings = [], storageFailure = nul
     hidden: false,
     getElementById: (id) => nodes[id] || null,
     querySelector: (selector) => selectors.get(selector) || null,
-    createElement: () => new Element(),
+    createElement: (tagName) => new Element(tagName),
   });
   const storage = new Map([[STORAGE_KEY, JSON.stringify(storedState)]]);
   const writes = [];
@@ -628,6 +630,7 @@ test("invalid drops prevent browser navigation but preserve form, generated outp
       assert.deepEqual(app.snapshot(), before);
       assert.equal(app.nodes["import-status"].hidden, false);
       assert.match(app.nodes["import-status"].textContent, scenario.error);
+      assert.deepEqual(app.nodes["import-status"].children.map((node) => node.tagName), ["STRONG"]);
     });
   }
 });
@@ -656,9 +659,16 @@ test("successful imports replace modes/options, override auto choices, regenerat
   for (const key of ["deep-color", "dsc"]) assertAutoHint(app, key, false);
   const status = app.nodes["import-status"];
   assert.equal(status.hidden, false);
-  assert.match(status.textContent, /Imported <display>\.bin/);
-  for (const warning of warnings) assert.ok(status.textContent.includes(warning));
-  assert.equal(status.children.length, 0, "Warnings and filenames must remain literal text");
+  assert.deepEqual(status.children.map((node) => node.tagName), ["DETAILS"]);
+  const details = status.children[0];
+  assert.equal(details.open, false, "Import warnings must initially be collapsed");
+  assert.deepEqual(details.children.map((node) => node.tagName), ["SUMMARY", "DIV"]);
+  const [heading, diagnostics] = details.children;
+  assert.deepEqual(heading.children.map((node) => node.tagName), ["STRONG"]);
+  assert.equal(heading.children[0].textContent, "Imported <display>.bin with warnings.");
+  assert.equal(heading.children[0].children.length, 0, "The filename must remain literal text");
+  assert.equal(diagnostics.textContent, warnings.join("\n"));
+  assert.equal(diagnostics.children.length, 0, "Warnings must remain literal text");
   assert.deepEqual(app.saved().options, Object.fromEntries(Object.keys(optionIds).map((key) => [key, importedSettings[key]])));
   assert.deepEqual(app.saved().extraModes, importedSettings.modes.slice(1).map((mode) =>
     Object.fromEntries(Object.entries(mode).map(([key, value]) => [key, String(value)]))));
@@ -679,6 +689,18 @@ test("successful imports replace modes/options, override auto choices, regenerat
   assert.equal(app.nodes["extra-modes"].children.length, 0);
   assert.equal(app.parsed.at(-1).length, 32768, "The maximum allowed file size is accepted");
   assert.deepEqual(createApp({ storedState: app.saved() }).formSettings(), secondSettings);
+});
+
+test("successful imports without warnings show only a literal bold filename", async () => {
+  const app = createApp();
+  const name = "<img src=x onerror=alert(1)>.bin";
+  app.drag("drop", { files: [file({ name })] });
+  await settle();
+  const status = app.nodes["import-status"];
+  assert.equal(status.hidden, false);
+  assert.deepEqual(status.children.map((node) => node.tagName), ["STRONG"]);
+  assert.equal(status.children[0].textContent, `Imported ${name}.`);
+  assert.equal(status.children[0].children.length, 0, "The filename must remain literal text");
 });
 
 test("out-of-order reads cannot replace a newer successful drop", async () => {
